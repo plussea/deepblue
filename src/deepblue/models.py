@@ -15,10 +15,23 @@ class Completion:
 
 
 class ModelClient(Protocol):
-    def complete(self, messages: list[Message], tools: list[dict]) -> Completion: ...
+    def complete(self, messages: list[Message], tools: list[dict],
+                 on_text: Callable[[str], None] | None = None) -> Completion: ...
 
 
 @dataclass
 class RunResult:
     status: str
     steps: int
+    verification_status: str = "unverified"
+    evidence: list[dict] = field(default_factory=list)
+    task_id: str = ""
+    run_id: str = ""
+
+    @property
+    def execution_status(self) -> str:
+        return "finished" if self.status == "completed" else self.status
+
+    @property
+    def successful(self) -> bool:
+        return self.status == "completed" and self.verification_status in {"passed", "unverified", "not_applicable"}

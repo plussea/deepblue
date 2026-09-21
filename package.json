@@ -1,0 +1,6 @@
+{
+  "name": "deepblue-web-tests",
+  "private": true,
+  "scripts": {"test:web": "node scripts/web_e2e.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

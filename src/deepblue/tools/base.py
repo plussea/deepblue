@@ -21,6 +21,8 @@ class ToolContext:
     cwd: Path
     artifacts: Path
     shell_timeout: float = 120
+    on_process: Callable[[dict], None] | None = None
+    cancelled: Callable[[], bool] | None = None
 
     def path(self, path: str) -> Path:
         candidate = Path(path).expanduser()
@@ -54,6 +56,7 @@ class Tool:
             schema = self.properties[key]
             kind = schema["type"]
             valid = ((kind == "string" and isinstance(value, str))
+                     or (kind == "boolean" and type(value) is bool)
                      or (kind == "integer" and type(value) is int)
                      or (kind == "number" and type(value) in (int, float)))
             if not valid:

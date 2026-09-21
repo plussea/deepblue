@@ -113,7 +113,7 @@ class ToolTests(unittest.TestCase):
 
     def test_shell_does_not_inherit_api_key(self):
         from unittest.mock import patch
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "private-key"}):
-            result = self.call("shell", command=python_command("import os; print('DEEPSEEK_API_KEY' in os.environ)"))
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "private-key", "LLM_API_KEY": "other-key"}):
+            result = self.call("shell", command=python_command("import os; print(any(key in os.environ for key in ['DEEPSEEK_API_KEY', 'LLM_API_KEY']))"))
         self.assertTrue(result["ok"])
         self.assertIn("False", result["output"])

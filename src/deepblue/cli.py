@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -13,16 +14,21 @@ from .llm import DeepSeekClient
 from .prompts import build_system_prompt
 from .session import Session
 from .tools import ToolContext, create_tools
+from .verification import VerificationConfig, current_status
 
 
-def display(text: str, *, error: bool = False):
+def display(text: str, *, error: bool = False, end: str = "\n"):
     # Repository contents and subprocess output must not inject terminal escapes.
     text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", text)
-    print(text, file=sys.stderr if error else sys.stdout, flush=True)
+    print(text, file=sys.stderr if error else sys.stdout, flush=True, end=end)
 
 
 def emit(kind: str, data: dict):
-    if kind == "text":
+    if kind == "text_delta":
+        display(data["text"], end="")
+    elif kind == "text_end":
+        display("")
+    elif kind == "text":
         display(data["text"])
     elif kind == "model_start":
         display(f"[深蓝 · 第 {data['step']} 轮] 等待 DeepSeek…", error=True)
@@ -47,14 +53,26 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("-c", "--continue", dest="resume", action="store_true", help="恢复当前目录最近的会话")
     result.add_argument("--cwd", type=Path, default=Path.cwd(), help="工作目录")
     result.add_argument("--model", default=None, help="模型名（新会话默认 deepseek-flash）")
-    result.add_argument("--base-url", default=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
+    result.add_argument("--base-url", default=os.getenv("DEEPSEEK_BASE_URL") or os.getenv("LLM_BASE_URL") or "https://api.deepseek.com")
     result.add_argument("--home", type=Path, default=Path(os.getenv("DEEPBLUE_HOME", str(Path.home() / ".deepblue"))))
     result.add_argument("--max-steps", type=int, default=30, help="一次任务最多调用模型的次数")
-    result.add_argument("--timeout", type=float, default=120, help="API 请求超时秒数")
+    result.add_argument("--timeout", type=float, default=os.getenv("LLM_TIMEOUT_SECONDS", "120"), help="API 请求超时秒数")
     result.add_argument("--shell-timeout", type=float, default=120, help="命令执行时限秒数")
     result.add_argument("--max-tokens", type=int, default=8192)
     result.add_argument("--max-context-bytes", type=int, default=400_000)
+    result.add_argument("--no-stream", action="store_true", help="关闭流式输出，等待完整回复")
+    result.add_argument("--no-auto-compact", action="store_true", help="关闭自动压缩")
+    result.add_argument("--compact-threshold", type=float, default=0.8, help="自动压缩字节阈值比例，0.2–0.95")
+    result.add_argument("--summary-format", choices=["structured", "text"], default="structured")
+    result.add_argument("--compact", action="store_true", help="恢复会话后先手动压缩上下文；须与 -c 一起使用")
+    result.add_argument("--keep-turns", type=int, default=2, help="压缩保留最近的用户轮次数（1–20）")
     result.add_argument("--version", action="version", version="DeepBlue " + __version__)
+    verification_group = result.add_mutually_exclusive_group()
+    verification_group.add_argument("--verify", metavar="COMMAND", help="模型结束后执行的显式验收命令")
+    verification_group.add_argument("--verify-not-applicable", metavar="REASON", help="显式声明无需代码验收的原因，如纯解释任务")
+    result.add_argument("--verify-cwd", type=Path, help="验收目录，默认工作目录；相对路径基于 --cwd")
+    result.add_argument("--verify-timeout", type=float, default=120, help="每次验收命令超时秒数")
+    result.add_argument("--verify-repairs", type=int, default=1, help="验收失败后最多修复次数（0–10），共享 max-steps")
     return result
 
 
@@ -64,17 +82,33 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(encoding="utf-8", errors="replace")
     argument_parser = parser()
     args = argument_parser.parse_args(argv)
-    if args.one_shot and not args.prompt:
+    if args.one_shot and not args.prompt and not args.compact:
         argument_parser.error("-p 需要提供任务文本。")
-    if not args.one_shot and not sys.stdin.isatty():
+    if args.compact and not args.resume:
+        argument_parser.error("--compact 必须与 --continue 一起使用。")
+    if not 1 <= args.keep_turns <= 20:
+        argument_parser.error("--keep-turns 必须在 1 到 20 之间。")
+    compact_only = args.compact and not args.prompt
+    if not args.one_shot and not compact_only and not sys.stdin.isatty():
         argument_parser.error("非交互环境请使用 -p \"任务\"。")
     session = None
     try:
-        config = Config(cwd=args.cwd, api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-                        model=args.model or os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
+        config = Config(cwd=args.cwd, api_key=os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY", ""),
+                        model=args.model or os.getenv("DEEPSEEK_MODEL") or os.getenv("LLM_MODEL") or "deepseek-flash",
                         base_url=args.base_url, home=args.home, max_steps=args.max_steps,
                         request_timeout=args.timeout, shell_timeout=args.shell_timeout,
-                        max_tokens=args.max_tokens, max_context_bytes=args.max_context_bytes)
+                        max_tokens=args.max_tokens, max_context_bytes=args.max_context_bytes,
+                        stream=not args.no_stream, auto_compact=not args.no_auto_compact,
+                        compact_threshold=args.compact_threshold, compact_keep_turns=args.keep_turns,
+                        summary_format=args.summary_format)
+        verification = None
+        if args.verify is not None:
+            verify_cwd = args.verify_cwd or config.cwd
+            if not verify_cwd.is_absolute():
+                verify_cwd = config.cwd / verify_cwd
+            verification = VerificationConfig(args.verify, verify_cwd, args.verify_timeout, args.verify_repairs)
+        elif args.verify_cwd is not None:
+            raise ValueError("--verify-cwd 必须与 --verify 一起使用。")
         if args.resume:
             session = Session.latest(config.home, config.cwd)
             if args.model and args.model != session.header["model"]:
@@ -85,12 +119,18 @@ def main(argv: list[str] | None = None) -> int:
 
         def make_agent():
             tools = create_tools(ToolContext(config.cwd, session.artifacts, config.shell_timeout))
-            return Agent(config, DeepSeekClient(config), tools, session, emit)
+            return Agent(config, DeepSeekClient(config), tools, session, emit, verification, args.verify_not_applicable)
 
         agent = make_agent()
+        if args.resume and (session.recovery.get("unfinished_operations") or session.recovery.get("changed_files")):
+            display("恢复核对：\n" + json.dumps(session.recovery, ensure_ascii=False, indent=2), error=True)
+        if args.compact:
+            success = agent.compact(args.keep_turns)
+            if compact_only or not success:
+                return 0 if success else 1
         if args.one_shot:
             result = agent.run(args.prompt)
-            return 0 if result.status == "completed" else 130 if result.status == "cancelled" else 1
+            return 0 if result.successful else 130 if result.status == "cancelled" else 1
         display(f"DeepBlue 深蓝 v{__version__} · {config.model}\n工作目录：{config.cwd}\n会话：{session.path}")
         display("输入任务开始。/help 查看命令；Ctrl+C 取消当前任务。")
         if args.resume:
@@ -113,9 +153,47 @@ def main(argv: list[str] | None = None) -> int:
             if prompt in {"/exit", "/quit"}:
                 return 0
             if prompt == "/help":
-                display("/help 帮助\n/new 新会话\n/status 当前配置和会话路径\n/retry 继续待处理请求\n/exit 退出")
+                display("/help 帮助\n/new 新会话\n/status 配置、上下文和用量\n/recovery 只读核对文件与未知操作\n/compact [N] 压缩历史，默认保留最近 2 轮\n/paste 多行输入，单独一行 /send 提交\n/retry 继续待处理请求\n/exit 退出")
+            elif prompt == "/recovery":
+                display(json.dumps(session.refresh_recovery(), ensure_ascii=False, indent=2))
             elif prompt == "/status":
-                display(f"模型：{config.model}\n目录：{config.cwd}\n会话：{session.path}\n消息数：{len(session.messages)}")
+                context = session.context_messages()
+                size = len(json.dumps(context, ensure_ascii=False).encode("utf-8"))
+                display(f"模型：{config.model}\n目录：{config.cwd}\n会话：{session.path}\n"
+                        f"历史消息：{len(session.messages)}，活动上下文消息：{len(context)}\n"
+                        f"上下文：{size}/{config.max_context_bytes} 字节，压缩次数：{session.compaction_count}\n"
+                        f"有用量记录的请求：{session.usage['api_calls']}，累计 token：{session.usage['total_tokens']}\n"
+                        f"流式输出：{'开启' if config.stream else '关闭'}")
+                display("最近运行验收：" + current_status(session.last_run, config.cwd, (config.home,))
+                        + "（仅针对该次任务及配置的检查）")
+            elif prompt == "/compact" or prompt.startswith("/compact "):
+                parts = prompt.split()
+                try:
+                    if len(parts) > 2:
+                        raise ValueError()
+                    keep = int(parts[1]) if len(parts) == 2 else args.keep_turns
+                except ValueError:
+                    display("用法：/compact [保留轮数，1–20]", error=True)
+                    continue
+                agent.compact(keep)
+            elif prompt == "/paste":
+                display("进入多行输入；单独一行 /send 提交，/cancel 或 Ctrl+C 取消。")
+                lines = []
+                try:
+                    while True:
+                        line = input("... ")
+                        if line == "/cancel":
+                            lines = []
+                            break
+                        if line == "/send":
+                            break
+                        lines.append(line)
+                except (EOFError, KeyboardInterrupt):
+                    lines = []
+                    display("\n已取消多行输入。")
+                combined = "\n".join(lines)
+                if combined.strip():
+                    agent.run(combined)
             elif prompt == "/new":
                 replacement = Session.create(config.home, config.cwd, config.model, build_system_prompt(config.cwd))
                 session.close()

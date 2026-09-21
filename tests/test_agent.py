@@ -28,7 +28,7 @@ class FakeClient:
         self.responses = iter(responses)
         self.requests = []
 
-    def complete(self, messages, tools):
+    def complete(self, messages, tools, on_text=None):
         self.requests.append(json.loads(json.dumps(messages)))
         item = next(self.responses)
         if isinstance(item, BaseException):
@@ -53,7 +53,9 @@ class AgentTests(unittest.TestCase):
 
     def test_repair_loop_runs_real_failing_and_passing_tests(self):
         (self.root / "calc.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
-        command = python_command("from calc import add; assert add(2, 3) == 5; print('PASS')")
+        # Equal-size source edits within one second can reuse timestamp-based
+        # pyc files. Keep this disposable fixture free of bytecode caches.
+        command = python_command("import sys; sys.dont_write_bytecode = True; from calc import add; assert add(2, 3) == 5; print('PASS')")
         _, client, result = self.run_agent([
             response(tool_call("shell", {"command": command}, "test1")),
             response(tool_call("read", {"path": "calc.py"}, "read1")),
@@ -66,7 +68,7 @@ class AgentTests(unittest.TestCase):
         first_result = json.loads(client.requests[1][-1]["content"])
         last_result = json.loads(client.requests[-1][-1]["content"])
         self.assertNotEqual(first_result["exit_code"], 0)
-        self.assertEqual(last_result["exit_code"], 0)
+        self.assertEqual(last_result["exit_code"], 0, last_result["output"])
         self.assertIn("PASS", last_result["output"])
 
     def test_truncated_tool_arguments_are_never_executed(self):
@@ -112,3 +114,36 @@ class AgentTests(unittest.TestCase):
                                                    tool_call("shell", {"command": "y"}, "b"))])
         self.assertEqual(result.status, "cancelled")
         self.assertEqual([m["tool_call_id"] for m in self.session.messages[-2:]], ["a", "b"])
+
+    def test_streamed_text_is_not_printed_twice(self):
+        events = []
+
+        class StreamingClient:
+            def complete(self, messages, tools, on_text=None):
+                on_text("深")
+                on_text("蓝")
+                return response(reason="stop", content="深蓝")
+
+        agent = Agent(self.config, StreamingClient(), self.tools, self.session,
+                      lambda kind, data: events.append((kind, data)))
+        self.assertEqual(agent.run("hello").status, "completed")
+        self.assertEqual([data["text"] for kind, data in events if kind == "text_delta"], ["深", "蓝"])
+        self.assertFalse(any(kind == "text" for kind, _ in events))
+        self.assertEqual(sum(kind == "text_end" for kind, _ in events), 1)
+
+    def test_partial_stream_error_is_not_saved_or_executed(self):
+        from unittest.mock import patch
+        events = []
+
+        class BrokenClient:
+            def complete(self, messages, tools, on_text=None):
+                on_text("partial")
+                raise ModelError("stream lost")
+
+        agent = Agent(self.config, BrokenClient(), self.tools, self.session,
+                      lambda kind, data: events.append(kind))
+        with patch.object(self.tools, "execute") as execute:
+            self.assertEqual(agent.run("hello").status, "error")
+            execute.assert_not_called()
+        self.assertEqual(self.session.messages[-1]["role"], "user")
+        self.assertEqual(events.count("text_end"), 1)

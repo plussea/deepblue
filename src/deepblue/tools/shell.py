@@ -48,6 +48,7 @@ def shell(context: ToolContext, args: dict) -> dict:
     env = os.environ.copy()
     # The model's shell commands do not need the provider credential.
     env.pop("DEEPSEEK_API_KEY", None)
+    env.pop("LLM_API_KEY", None)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUNBUFFERED"] = "1"
     reason = None
@@ -60,8 +61,13 @@ def shell(context: ToolContext, args: dict) -> dict:
             if os.name == "nt":
                 from .process import WindowsJob
                 job = WindowsJob(process)
+            if context.on_process:
+                context.on_process({"pid": process.pid, "log_path": str(log_path), "command": command,
+                                    "cwd": str(context.cwd), "started_at_unix": time.time()})
             deadline = time.monotonic() + timeout
             while process.poll() is None:
+                if context.cancelled and context.cancelled():
+                    raise KeyboardInterrupt()
                 if time.monotonic() >= deadline:
                     reason = "命令超时，已终止进程树。"
                     stop_process(process, job)

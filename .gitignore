@@ -7,3 +7,4 @@ dist/
 .env
 .deepblue/
 .test-tmp/
+node_modules/
