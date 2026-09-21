@@ -25,7 +25,7 @@ deepblue-web --cwd "E:\projects\my-app" --port 30142
 4. “状态”中查看上下文、用量、验收记录、实时工具日志和恢复核对。验收通过只代表指定检查通过，文件随后变化会显示证据过期。
 5. “修改”中查看 Git 暂存/未暂存/未跟踪差异，以及任务开始前已有的修改；非 Git 项目可查看已记录的文件操作。
 
-会话支持分页、内容搜索、重命名、归档/恢复和 MD/JSON 导出。归档不删除数据；执行中的会话不能归档。历史每页默认 100 条，可点击“加载历史”。草稿及验收命令按项目/会话保存在当前浏览器，刷新会恢复，可用“清除草稿”删除当前草稿。
+浅色界面保留底栏 Token 和压缩次数；重命名、归档/恢复和 MD/JSON 导出位于“会话操作”菜单。会话支持分页与内容搜索。归档不删除数据；执行中的会话不能归档。历史每页默认 100 条，可点击“加载历史”。草稿及验收命令按项目/会话保存在当前浏览器，刷新会恢复，可在“验收设置”中点击“清除草稿”删除当前草稿。
 
 消息支持常用 Markdown、代码复制与基础高亮，原始 HTML 不执行。文件支持路径搜索、UTF-8 预览、行号、内容查找和手动刷新，不提供上传或直接编辑。窄屏用顶部“会话”“文件面板”打开抽屉。
 
@@ -55,3 +55,9 @@ Web 通过带请求 Token 的 fetch SSE 接收事件，带任务 ID、序号、�
 Issue：原始工作台 [#7](https://github.com/plussea/deepblue/issues/7)，总路线 [#8](https://github.com/plussea/deepblue/issues/8)，v0.6 [#9](https://github.com/plussea/deepblue/issues/9)/[#10](https://github.com/plussea/deepblue/issues/10)/[#11](https://github.com/plussea/deepblue/issues/11)，v0.7 [#12](https://github.com/plussea/deepblue/issues/12)/[#13](https://github.com/plussea/deepblue/issues/13)。源码同步状态见仓库提交历史及对应 Issue。
 
 存储权限修复记录：[Issue #14](https://github.com/plussea/deepblue/issues/14)。更换存储目录或重启后，原本只在内存中的网页 Key 需要重新输入。
+
+## v0.7.2
+
+最后一次任务的有界错误提示、压缩结果保存在任务元数据中（最多 6 条、每条 2000 字符，先脱敏再写入），刷新或服务重启后可见。新任务不沿用上次错误。短会话没有压缩收益时保留原文，次数不增加。
+
+真实 Web 验收、故障验证和界面变更见 [v0.7.2 验收记录](v0.7.2.md)，跟踪 [#15](https://github.com/plussea/deepblue/issues/15)、[#16](https://github.com/plussea/deepblue/issues/16)。

@@ -1,5 +1,5 @@
 import {$,state,api,node,banner,safely,storage} from './api.js';
-import {clearChat,transcript,metrics,follow} from './render.js';
+import {clearChat,transcript,metrics,follow,notice} from './render.js';
 let items=[],next=null,before=null,listRequest=null,sessionRequest=null,listGeneration=0,archived=false;
 export function saveDraft(){storage('draft:'+(state.selected||'new'),{prompt:$('prompt').value,verify:$('verify-command').value});}
 export function loadDraft(){const data=storage('draft:'+(state.selected||'new'))||{};$('prompt').value=data.prompt||'';$('verify-command').value=data.verify||'';}
@@ -11,7 +11,7 @@ export async function openSession(id,{more=false,save=true}={}){
   const data=await api('session?id='+encodeURIComponent(id)+(more&&before!==null?'&before='+before:''),undefined,{signal:sessionRequest.signal});if(version!==state.generation||state.selected!==id)return;
   const container=$('conversation'),height=container.scrollHeight,top=container.scrollTop;
   if(more){const old=[...container.childNodes];clearChat();transcript(data.messages,id);container.append(...old);container.scrollTop=top+container.scrollHeight-height;}
-  else {clearChat();transcript(data.messages,id);state.following=true;follow();}
+  else {clearChat();transcript(data.messages,id);for(const text of data.job_notices||[])notice(text);state.following=true;follow();}
   before=data.before;$('older-messages').hidden=before===null;$('session-title').textContent=data.metadata.title||items.find(s=>s.id===id)?.title||'当前会话';$('archive-session').textContent=data.metadata.archived?'恢复会话':'归档会话';$('model-name').textContent=data.model;metrics(data);
   for(const control of ['rename-session','archive-session','export-md','export-json'])$(control).disabled=false;
   if(!more)document.dispatchEvent(new CustomEvent('session-opened',{detail:id}));

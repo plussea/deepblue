@@ -149,12 +149,16 @@ class WorkspaceFeatures:
             # No writer lock is acquired. Only complete newline-terminated records are observed.
             context = session.context_messages()
             with self.lock:
-                job_status = next((j['status'] for j in reversed(list(self.jobs.values())) if j['session_id'] == session_id), None)
+                job = next((j for j in reversed(list(self.jobs.values())) if j['session_id'] == session_id), {})
+                job_status = job.get('status')
+                job_notices = list(job.get('notices') or []) if job.get('finished') else []
+                job_outcome = dict(job.get('outcome') or {})
             return self.redact(dict(id=session_id, **page, model=session.header['model'], usage=session.usage,
                 compactions=session.compaction_count, context_bytes=len(json.dumps(context, ensure_ascii=False).encode()),
                 context_limit=self.settings['max_context_bytes'], recovery=session.refresh_recovery(),
                 verification_status=current_status(session.last_run, self.cwd, (self.home,)),
                 last_run=session.last_run, metadata=self.metadata(session_id), evidence=self.evidence_list(session), job_status=job_status,
+                job_notices=job_notices, job_outcome=job_outcome,
                 logs=[dict(id=o['operation_id'], name=o['name'], phase=o['phase']) for o in session.operations.values() if o.get('log_path')]))
 
     def export(self, session_id, format):

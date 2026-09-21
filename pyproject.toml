@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepblue-agent"
-version = "0.7.1"
+version = "0.7.2"
 description = "深蓝：基于 DeepSeek API 的轻量级终端 coding agent"
 readme = "README.md"
 requires-python = ">=3.10"

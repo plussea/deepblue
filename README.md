@@ -22,7 +22,7 @@
 
 第一版专注于一个闭环：**阅读代码 → 修改代码 → 运行测试 → 根据结果修复 → 汇报结果**。
 
-当前版本 **v0.7.1** 包含 v0.2–v0.7 的功能，并修复 Web 默认会话目录不可写导致的 `WinError 5`：在上下文管理、程序化验收与中断恢复基础上，完善 **可靠的 Web 任务连接、会话管理、DeepSeek 设置、Markdown、文件引用、Git 差异与验收日志**。CLI 与 Web 共享同一套 Agent 和本地会话，保持 Python 标准库后端和单 Agent。
+当前版本 **v0.7.2** 在 v0.7.1 的项目内存储修复基础上，加入 **浅色简约 Web 界面、任务错误与压缩结果的持久展示**，并补齐真实 DeepSeek Web 验收。支持会话管理、Markdown、文件引用、Git 差异与验收日志。CLI 与 Web 共享同一套 Agent 和本地会话，保持 Python 标准库后端和单 Agent。
 
 项目参考 [pi](https://github.com/earendil-works/pi) 的小核心、少量工具、模型驱动工作方式，使用 Python 独立实现。Web 布局参考本地 `pi-web` 的会话、对话与文件面板，独立实现；仍保持单 Agent，不引入插件系统或复杂终端界面。
 
@@ -129,12 +129,13 @@ deepblue-web --cwd "E:\projects\my-app"
 
 打开 **http://127.0.0.1:30142**。默认只监听本机，可用 `--port 30143` 更换端口；Web 默认存储在项目内 `.deepblue`（避免受限环境无法写入用户目录）；`--home` 或 `DEEPBLUE_HOME` 可显式覆盖。CLI 默认仍为用户目录 `~/.deepblue`；需为两者指定同一存储目录才能共享会话。服务启动时会验证目录可写，并显示存储路径。支持 `--model`、`--base-url`、`--timeout`，沿用 DeepSeek/LLM 环境变量；Web 默认网络操作超时 30 秒。
 
-- 左侧：会话分页、标题/内容搜索、新建、重命名、归档/恢复、Markdown/JSON 导出；运行时可浏览其他会话。
+- 浅色界面：白色对话区、浅灰侧栏；底栏常驻累计 Token 与压缩次数。
+- 左侧：会话分页、标题/内容搜索、新建；重命名、归档/恢复、MD/JSON 导出收纳在对话区“会话操作”菜单。运行时可浏览其他会话。
 - 中间：常用 Markdown、代码复制/基础高亮、工具卡片、继续请求、压缩与指定任务停止。草稿按项目/会话保存在浏览器，可清除。
 - 右侧：文件搜索、文本预览、行号/查找/刷新；输入 `@` 或点击“引用文件”将相对路径交给 Agent 读取。
 - “状态”：用量、上下文、验收证据与分页日志、实时工具输出、过期证据和恢复核对。
 - “修改”：只读 Git 状态、暂存/未暂存/未跟踪差异，区分任务开始前已有修改；非 Git 项目显示已记录的文件操作。
-- 输入框下可配置验收命令；失败后最多修复一次。默认单任务最多 30 个模型轮次，Shell/验收超时 120 秒。
+- 展开输入框下的“验收设置”可配置验收命令或清除草稿；失败后最多修复一次。默认单任务最多 30 个模型轮次，Shell/验收超时 120 秒。
 
 **配置 Key**：可使用启动环境变量，也可在左下角“DeepSeek 设置”输入本次服务使用的 Key。环境管理的配置在网页中锁定；网页输入的 Key 仅留在服务端内存，不回显、不写磁盘或浏览器存储，重启后需重新输入。新任务冻结设置，既有会话沿用原模型。“测试连接”会显式调用一次模型 API。
 
@@ -142,7 +143,9 @@ deepblue-web --cwd "E:\projects\my-app"
 
 停止不会回滚已发生的修改。历史按页加载，事件缓存最多 2000 条，缺口通过有界任务快照同步，原始记录仍保存在 JSONL。网页文件/日志访问有路径边界，Agent 的 Shell 仍按当前用户权限运行；本机来源校验不是公网账号认证。
 
-详见 [Web 使用说明](docs/web.md)、[v0.6](docs/v0.6.md)、[v0.7](docs/v0.7.md)。
+任务结束后的错误和压缩结果会保留，刷新或重启后仍可查看；工具失败展示在对应工具卡片。短会话若压缩后更大，会保留原文，压缩次数不会增加。
+
+详见 [Web 使用说明](docs/web.md)、[v0.7.2 验收记录](docs/v0.7.2.md)、[v0.7](docs/v0.7.md)。
 
 ## 模型与认证
 
@@ -171,7 +174,7 @@ API Key 不写入配置文件或会话元数据，也不会传入 `shell` 子进
 启动时展示版本、模型、工作目录和会话路径。执行期间显示模型调用轮次、工具名称、修改 diff、命令结果和日志路径。
 
 ```text
-DeepBlue 深蓝 v0.7.1 · deepseek-flash
+DeepBlue 深蓝 v0.7.2 · deepseek-flash
 工作目录：...
 会话：...
 
@@ -529,11 +532,13 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 PYTHONPATH=src python -m deepblue --help
 ```
 
+v0.7.2 本地回归：**108 项 Python 测试、15 组浏览器场景通过**；包括 401、429、超时、断流后禁止执行工具，以及错误刷新恢复。真实 DeepSeek Web 四组验收通过，覆盖 hi、修复与验收、压缩记忆、停止与刷新；详见 [验收记录](docs/v0.7.2.md)。源码与验收文档随 v0.7.2 提交交付；远程同步状态见对应 Issue。
+
 v0.7.1 提交前完整回归：**107 项 Python 测试通过**（Windows / Python 3.12，ResourceWarning 作为错误），包含 Web 存储权限与默认目录优先级测试。本次未重复调用真实 DeepSeek。
 
 v0.7.0 验收记录：**105 项 Python 回归、10 组浏览器端到端场景通过**，wheel 构建、独立安装、CLI/Web 入口与 8 个静态资源验证通过。浏览器测试运行方式见 [v0.7 验收说明](docs/v0.7.md)。
 
-测试使用脚本化模型响应和本机 HTTP 服务，**不需要 API Key，不调用收费接口**。覆盖工具调用闭环、真实命令执行、失败测试修复、中文路径、CRLF/BOM、错误参数、截断调用、超时、会话恢复、文件锁、CLI 和 HTTP 消息格式。
+常规 Python / `npm run test:web` 测试使用脚本化模型响应和本机 HTTP 服务，**不需要 API Key，不调用收费接口**。覆盖工具调用闭环、真实命令执行、失败测试修复、中文路径、CRLF/BOM、错误参数、截断调用、超时、会话恢复、文件锁、CLI 和 HTTP 消息格式。
 
 这里的“失败测试修复”使用固定模型响应驱动真实文件编辑和真实测试运行，验证运行时闭环，不代表对 DeepSeek 模型能力的评测。
 
@@ -553,6 +558,21 @@ python scripts/live_smoke.py --v2
 该脚本**会调用收费 API**，不会被普通单元测试自动执行。它在 `.test-tmp/` 创建独立项目，验证流式对话、六个工具、失败测试修复和压缩后的记忆恢复，并用本地测试独立核对修复结果。不加 `--v2` 则只验收原有四个编码工具和普通会话恢复。脱敏报告和日志保存在对应 `live-*` 子目录；密钥只从环境变量读取。
 
 已完成 `deepseek-v4-flash` 真实联调：[第一版联调记录](docs/live-integration.md)、[第二版实现与验收](docs/v0.2.md)。第二版 58 项本地测试通过，六工具编码闭环及压缩后的记忆恢复验证通过。
+
+### 真实 Web 验收（显式收费）
+
+先以当前仓库为 `--cwd` 启动 Web，在网页设置中配置真实 DeepSeek Key。脚本通过浏览器操作已启动服务，不读取或复制 Key；临时文件和脱敏报告保存在 `.test-tmp/web-live-*`。执行前应确保没有其他任务，验收期间不要修改工作区，以免验收证据因文件变化失效。
+
+```powershell
+npm install
+$env:DEEPBLUE_PYTHON = (Get-Command python).Source # Python >= 3.10
+$env:DEEPBLUE_WEB_URL = "http://127.0.0.1:30142"
+# 已安装 Chrome 时可指定；否则先 npx playwright install chromium
+$env:CHROME_PATH = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+npm run test:web:live
+```
+
+可直接运行 `node scripts/web_live_smoke.cjs --run`。测试修复独立的小文件、运行指定检查、制造可压缩历史并取消一个等待命令，会产生多次模型请求及摘要费用。失败后报告保留已通过项，可使用 `--run --resume .test-tmp/web-live-xxxxxxxx` 继续同一测试会话；它不会重跑已通过项。受控 401/429/超时/断流走 `npm run test:web`，不对真实账户制造故障。
 
 ## 更新记录与 Issue
 
@@ -576,6 +596,8 @@ python scripts/live_smoke.py --v2
 | [#12：v0.7 消息与文件](https://github.com/plussea/deepblue/issues/12) | 安全 Markdown、代码复制/高亮、工具卡片、文件行号和引用 | 105 项回归、10 组浏览器场景及打包安装通过；实现完成 |
 | [#13：v0.7 修改与证据](https://github.com/plussea/deepblue/issues/13) | Git diff、已有改动基线、验收/工具日志、恢复详情 | 105 项回归、10 组浏览器场景及打包安装通过；实现完成 |
 | [#14：Web 存储权限修复](https://github.com/plussea/deepblue/issues/14) | 项目内默认存储、启动写入预检与可操作错误提示 | 22 项 Web 回归通过，实际服务已改用项目内存储；实现完成 |
+| [#15：v0.7.x 真实 Web 验收](https://github.com/plussea/deepblue/issues/15) | 真实浏览器链路、受控故障、错误刷新恢复 | 实现与验收通过；源码交付状态见 Issue |
+| [#16：浅色简约 Web](https://github.com/plussea/deepblue/issues/16) | 配色与信息精简、会话菜单、保留 Token/压缩次数 | 桌面/窄屏回归通过；源码交付状态见 Issue |
 
 ## 运行边界
 

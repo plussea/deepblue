@@ -154,3 +154,25 @@ class WebTests(unittest.TestCase):
             self.request("/api/run", {"prompt": "missing key"})
             events = self.wait_job()
         self.assertTrue(any(e["kind"] == "error" for e in events["events"]))
+        state = self.workspace.state(events['session_id'])
+        self.assertTrue(state['job_notices'])
+        restarted = Workspace(self.root, self.base / 'home')
+        self.assertEqual(restarted.state(events['session_id'])['job_notices'], state['job_notices'])
+
+    def test_job_diagnostics_are_bounded_redacted_and_latest_only(self):
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "", "LLM_API_KEY": ""}):
+            self.request('/api/run', {'prompt': 'diagnostics'})
+            events = self.wait_job()
+        self.workspace.secrets.add('diagnostic-test-secret')
+        job = self.workspace.job
+        for i in range(10):
+            self.workspace.append_event(job, 'notice', {'text': f'{i}: diagnostic-test-secret ' + 'x' * 3000})
+        self.workspace.persist_job(job)
+        saved = Workspace(self.root, self.base / 'home').state(events['session_id'])
+        self.assertEqual(len(saved['job_notices']), 6)
+        self.assertTrue(all(len(s) <= 2000 for s in saved['job_notices']))
+        self.assertNotIn('diagnostic-test-secret', json.dumps(saved['job_notices']))
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "", "LLM_API_KEY": ""}):
+            self.request('/api/run', {'prompt': 'new attempt', 'session_id': events['session_id']})
+            self.wait_job()
+        self.assertNotIn('xxxx', json.dumps(self.workspace.state(events['session_id'])['job_notices']))

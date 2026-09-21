@@ -38,7 +38,7 @@ class JobManager:
                 continue
 
     def persist_job(self, job):
-        public = {k: job.get(k) for k in ('id', 'session_id', 'request_id', 'request_hash', 'finished', 'status', 'created', 'outcome', 'baseline')}
+        public = {k: job.get(k) for k in ('id', 'session_id', 'request_id', 'request_hash', 'finished', 'status', 'created', 'outcome', 'baseline', 'notices')}
         atomic_json(self.job_dir / (job['id'] + '.json'), public)
 
     def append_event(self, job, kind, data):
@@ -61,6 +61,9 @@ class JobManager:
                 job['outcome'] = data
             if kind == 'error':
                 job['has_error'] = True
+            if kind == 'error' or (kind == 'notice' and not str(data.get('text', '')).startswith(('执行：', '正在压缩历史', '生成第'))):
+                # Keep bounded, already-redacted diagnostics after transcript refresh/restart.
+                job['notices'] = ((job.get('notices') or []) + [str(data.get('text', ''))[:2000]])[-6:]
 
     def start(self, data):
         request_id = data.get('request_id') or uuid.uuid4().hex

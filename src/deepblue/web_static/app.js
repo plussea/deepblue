@@ -46,6 +46,9 @@ $('toggle-files').onclick=()=>{const w=document.querySelector('.workspace');if(i
 for(const b of document.querySelectorAll('[data-prompt]'))b.onclick=()=>{$('prompt').value=b.dataset.prompt;saveDraft();$('prompt').focus();};
 $('settings-open').onclick=safely(showSettings);$('settings-save').onclick=safely(()=>saveSettings());$('settings-clear-key').onclick=safely(()=>saveSettings(true));$('settings-test').onclick=safely(async()=>{$('settings-test').disabled=true;$('settings-result').textContent='正在测试（会发起一次模型请求）…';try{await saveSettings();const result=await api('config/test',{}, {timeout:310000});$('settings-result').textContent='连接成功：'+result.model;}catch(e){$('settings-result').textContent=e.message;}finally{$('settings-test').disabled=false;}});
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>$(b.dataset.close).close();
+const sessionMenu=document.querySelector('.session-menu');
+document.addEventListener('click',e=>{if(!sessionMenu.contains(e.target)||e.target.closest('.session-menu-items button'))sessionMenu.open=false;});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')sessionMenu.open=false;});
 
 (async()=>{try{const info=await api('bootstrap');state.token=info.token;state.configured=info.configured;state.project=info.cwd;const project=info.cwd.split(/[\\/]/).filter(Boolean).at(-1);for(const id of ['project-name','breadcrumb-project','cwd-label'])$(id).textContent=project;$('project-name').title=info.cwd;$('model-name').textContent=info.model;$('version').textContent='v'+info.version;if(!info.configured)banner('尚未配置 DeepSeek Key。点击“设置”后可执行任务。');await Promise.all([refreshSessions(),listFiles()]);loadDraft();
   const selected=storage('selected');if(selected){try{await openSession(selected,{save:false});}catch{state.selected=null;loadDraft();}}

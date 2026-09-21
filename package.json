@@ -1,6 +1,6 @@
 {
   "name": "deepblue-web-tests",
   "private": true,
-  "scripts": {"test:web": "node scripts/web_e2e.cjs"},
+  "scripts": {"test:web": "node scripts/web_e2e.cjs", "test:web:live": "node scripts/web_live_smoke.cjs --run"},
   "devDependencies": {"playwright": "1.62.1"}
 }

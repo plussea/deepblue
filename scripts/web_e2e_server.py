@@ -20,6 +20,17 @@ class Provider(BaseHTTPRequestHandler):
     def do_POST(self):
         data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         prompt = data['messages'][-1].get('content') or ''
+        if prompt in ('fault-401', 'fault-429'):
+            raw = b'upstream echoes browser-fixture-secret'
+            self.send_response(int(prompt[-3:]))
+            self.send_header('Content-Length', str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
+        if prompt == 'fault-timeout':
+            time.sleep(1)
+            self.close_connection = True
+            return
         tool_fixture = data['messages'][-1].get('role') == 'user' and 'tool-fixture' in prompt
         text = '# 模拟回复\n\n- 已读取\n- 已完成\n\n| 项目 | 状态 |\n| --- | --- |\n| 测试 | 通过 |\n\n```python\nprint("深蓝")\n```\n\n[打开文件](hello.py#L2)\n<script>window.injected=true</script>\n[危险链接](javascript:alert(1))'
         if not data.get('stream'):
@@ -33,6 +44,16 @@ class Provider(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/event-stream')
         self.end_headers()
         try:
+            if prompt == 'fault-disconnect':
+                # A complete tool call without DONE must never be executed.
+                raw = {'choices': [{'index': 0, 'delta': {'tool_calls': [
+                    {'index': 0, 'id': 'never-run', 'type': 'function', 'function': {
+                        'name': 'write', 'arguments': json.dumps({'path': 'must-not-exist.txt', 'content': 'unsafe'})}}
+                ]}, 'finish_reason': 'tool_calls'}]}
+                self.wfile.write(('data: ' + json.dumps(raw) + '\n\n').encode())
+                self.wfile.flush()
+                self.close_connection = True
+                return
             count = 70 if 'slow' in prompt else 1
             for i in range(count):
                 delta = (f'第 {i} 行输出。\n\n' + '说明文字。' * 30 + '\n\n') if count > 1 else text
@@ -40,12 +61,15 @@ class Provider(BaseHTTPRequestHandler):
                 if tool_fixture:
                     content = {'tool_calls': [{'index': 0, 'id': 'fixture-shell', 'type': 'function', 'function': {
                         'name': 'shell', 'arguments': json.dumps({'command': python_command("import time; print('live log', flush=True); time.sleep(5); print('done')")})}}]}
+                if prompt == 'fault-tool':
+                    content = {'tool_calls': [{'index': 0, 'id': 'missing-file', 'type': 'function', 'function': {
+                        'name': 'read', 'arguments': json.dumps({'path': 'nonexistent-fixture.txt'})}}]}
                 raw = {'choices': [{'index': 0, 'delta': content, 'finish_reason': None}]}
                 self.wfile.write(('data: ' + json.dumps(raw) + '\n\n').encode())
                 self.wfile.flush()
                 if count > 1:
                     time.sleep(.2)
-            self.wfile.write(('data: ' + json.dumps({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'tool_calls' if tool_fixture else 'stop'}], 'usage': {'total_tokens': 20}}) + '\n\ndata: [DONE]\n\n').encode())
+            self.wfile.write(('data: ' + json.dumps({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'tool_calls' if tool_fixture or prompt == 'fault-tool' else 'stop'}], 'usage': {'total_tokens': 20}}) + '\n\ndata: [DONE]\n\n').encode())
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
 
