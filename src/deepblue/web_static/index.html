@@ -10,7 +10,7 @@
     <div class="project"><span class="folder-icon">▱</span><div id="project-name">当前项目</div><span class="project-dot"></span></div>
     <label class="search"><span>⌕</span><input id="session-search" placeholder="搜索会话…" aria-label="搜索会话"></label>
     <div class="section-label history-label">最近会话 <span id="session-count">0</span></div>
-    <label class="archive-toggle"><input type="checkbox" id="show-archived"> 已归档</label><nav id="sessions" aria-label="最近会话"></nav><button id="more-sessions" class="quiet-button" hidden>更多会话</button><button id="settings-open" class="quiet-button">⚙ DeepSeek 设置</button>
+    <label class="archive-toggle"><input type="checkbox" id="show-archived"> 已归档</label><nav id="sessions" aria-label="最近会话"></nav><button id="more-sessions" class="quiet-button" hidden>更多会话</button><button id="settings-open" class="quiet-button">⚙ 模型与 API 设置</button>
     <div class="sidebar-footer"><span class="avatar">深</span><div>本地工作空间<small id="version">DeepBlue</small></div></div>
   </aside>
   <main class="main">
@@ -28,13 +28,13 @@
     <section id="details-panel" hidden><div class="metric-card"><span>活动上下文</span><strong id="context-value">0 <small>/ 400 KB</small></strong><progress id="context-progress" max="100" value="0"></progress><small>按字节统计，不等同于 Token</small></div><div class="metric-grid"><div><small>累计 Token</small><strong id="tokens-value">0</strong></div><div><small>压缩次数</small><strong id="compact-value">0</strong></div></div><div class="detail-section"><h3>验收结果</h3><div class="verification-badge" id="verification-state">未配置验收</div><div id="evidence-list"></div><h3>工具日志</h3><div id="tool-logs"></div></div><div class="detail-section"><details><summary>任务状态</summary><pre id="task-state-detail">暂无记录</pre></details><h3>恢复核对</h3><p id="recovery-summary">暂无记录</p><pre id="recovery-detail"></pre></div></section>
     <section id="review-panel" hidden><button id="refresh-review" class="quiet-button">刷新差异</button><div id="review-content"></div></section></aside>
 </div>
-<dialog id="settings-dialog"><div class="dialog-heading"><h2>DeepSeek 设置</h2><button data-close="settings-dialog">关闭</button></div>
-<p>仅当前本机服务使用。环境变量优先，新设置仅影响后续任务。</p>
+<dialog id="settings-dialog"><div class="dialog-heading"><h2>模型与 API 设置</h2><button data-close="settings-dialog">关闭</button></div>
+<p>配置保存在本机。新设置仅影响后续任务。</p><label>API 配置<select id="setting-profile"></select></label><button id="profile-new">新增 API</button><label>配置名称<input id="setting-name"></label><label>接口类型<select id="setting-provider"><option value="deepseek">DeepSeek 预设</option><option value="openai-compatible">OpenAI 兼容（Chat Completions）</option></select></label>
 <label>模型<input id="setting-model"><small id="source-model"></small></label>
 <label>API 地址<input id="setting-base_url"><small id="source-base_url"></small></label>
 <label>超时（秒）<input id="setting-timeout" type="number" min="0.1" max="300"><small id="source-timeout"></small></label>
-<label>API Key<input id="setting-api_key" type="password" autocomplete="off"><small id="source-api_key"></small></label>
-<div class="dialog-actions"><button id="settings-save">保存</button><button id="settings-clear-key">清除内存 Key</button><button id="settings-test">测试连接（调用 API）</button></div><p id="settings-result" role="status"></p></dialog>
+<label>API Key<input id="setting-api_key" type="password" autocomplete="off"><small id="source-api_key"></small></label><button id="key-toggle" type="button">显示 Key</button><details><summary>兼容设置</summary><label>输出上限字段<select id="setting-token_parameter"><option>max_tokens</option><option>max_completion_tokens</option></select></label><label><input id="setting-include_usage" type="checkbox">请求流式 Token 用量</label></details>
+<div class="dialog-actions"><button id="settings-save">保存</button><button id="settings-clear-key">清除保存的 Key</button><button id="settings-test">测试连接（调用 API）</button></div><p id="settings-result" role="status"></p></dialog>
 <dialog id="rename-dialog"><form id="rename-form"><label>会话标题<input id="rename-value" maxlength="120" required></label><button type="submit">保存标题</button><button type="button" data-close="rename-dialog">取消</button></form></dialog>
 <dialog id="log-dialog"><div class="dialog-heading"><h2 id="log-title"></h2><button data-close="log-dialog">关闭</button></div><pre id="log-content"></pre><button id="log-more">读取下一段</button></dialog>
 <dialog id="projects-dialog"><div class="dialog-heading"><h2>项目</h2><button data-close="projects-dialog">关闭</button></div><div id="project-list"></div><form id="project-add"><label>已有项目绝对目录<input id="project-path" required></label><button>添加并打开</button></form></dialog>

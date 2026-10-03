@@ -11,6 +11,9 @@ class Config:
     api_key: str = field(repr=False)
     model: str = "deepseek-flash"
     base_url: str = "https://api.deepseek.com"
+    provider: str = "deepseek"
+    include_usage: bool = True
+    token_parameter: str = "max_tokens"
     home: Path = field(default_factory=lambda: Path.home() / ".deepblue")
     permission_mode: str = "trusted"
     max_steps: int = 30
@@ -31,6 +34,10 @@ class Config:
     summary_format: str = "structured"
 
     def __post_init__(self):
+        if self.provider not in {"deepseek", "openai-compatible"}:
+            raise ValueError("不支持的 API 类型。")
+        if self.token_parameter not in {"max_tokens", "max_completion_tokens"} or type(self.include_usage) is not bool:
+            raise ValueError("无效兼容参数。")
         from .permissions import MODES
         if self.permission_mode not in MODES:
             raise ValueError("无效权限模式。")

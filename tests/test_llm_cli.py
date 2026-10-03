@@ -70,6 +70,17 @@ class HttpTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(timeout=5)
 
+    def test_generic_protocol_omits_vendor_parameters(self):
+        self.config.provider='openai-compatible'
+        self.config.include_usage=False
+        self.config.token_parameter='max_completion_tokens'
+        DeepSeekClient(self.config).complete([{'role':'user','content':'hi'}],[],lambda text:None)
+        body=self.requests[-1][2]
+        self.assertNotIn('thinking',body)
+        self.assertNotIn('stream_options',body)
+        self.assertNotIn('max_tokens',body)
+        self.assertEqual(body['max_completion_tokens'],self.config.max_tokens)
+
     def test_http_protocol(self):
         result = DeepSeekClient(self.config).complete([{"role": "user", "content": "hi"}], [])
         self.assertEqual(result.message["content"], "你好，深蓝")

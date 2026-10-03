@@ -71,6 +71,8 @@ class Workspace(WorkflowFeatures, WorkspaceFeatures, JobManager):
         if not isinstance(value, str):
             raise ValueError("无效的文件路径。")
         path = (self.cwd / value).resolve()
+        if path == self.profile_store.path.resolve():
+            raise ValueError("凭据配置请通过模型设置管理。")
         if not path.is_relative_to(self.cwd) or ".git" in path.relative_to(self.cwd).parts:
             raise ValueError("文件路径超出工作区。")
         return path
@@ -247,6 +249,8 @@ def make_server(workspace, port=30142):
                     return self.send(200, workspace.cancel(data['job_id']))
                 if self.path == '/api/session/edit':
                     return self.send(200, workspace.edit_session(data))
+                if self.path == '/api/config/key':
+                    return self.send(200, json.dumps({'api_key': workspace.api_key()}, ensure_ascii=False).encode('utf-8'))
                 if self.path == '/api/config':
                     return self.send(200, workspace.configure(data))
                 if self.path == '/api/config/test':

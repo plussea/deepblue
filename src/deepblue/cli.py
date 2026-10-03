@@ -52,6 +52,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("-p", "--print", dest="one_shot", action="store_true", help="执行一次任务后退出")
     result.add_argument("-c", "--continue", dest="resume", action="store_true", help="恢复当前目录最近的会话")
     result.add_argument("--cwd", type=Path, default=Path.cwd(), help="工作目录")
+    result.add_argument("--token-parameter", choices=["max_tokens","max_completion_tokens"], default="max_tokens")
+    result.add_argument("--no-stream-usage", action="store_true")
+    result.add_argument("--provider", choices=["deepseek","openai-compatible"], default="deepseek")
     result.add_argument("--model", default=None, help="模型名（新会话默认 deepseek-flash）")
     result.add_argument("--base-url", default=os.getenv("DEEPSEEK_BASE_URL") or os.getenv("LLM_BASE_URL") or "https://api.deepseek.com")
     result.add_argument("--home", type=Path, default=Path(os.getenv("DEEPBLUE_HOME", str(Path.home() / ".deepblue"))))
@@ -105,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         argument_parser.error("非交互环境请使用 -p \"任务\"。")
     session = None
     try:
-        config = Config(cwd=args.cwd, api_key=os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY", ""),
+        config = Config(provider=args.provider,token_parameter=args.token_parameter,include_usage=not args.no_stream_usage,cwd=args.cwd, api_key=os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY", ""),
                         model=args.model or os.getenv("DEEPSEEK_MODEL") or os.getenv("LLM_MODEL") or "deepseek-flash",
                         base_url=args.base_url, home=args.home, max_steps=args.max_steps,
                         request_timeout=args.timeout, shell_timeout=args.shell_timeout,

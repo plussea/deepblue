@@ -32,14 +32,14 @@ def main():
     cancelled = lambda: Path(options["cancel_path"]).exists()
     try:
         config = Config(Path(options["cwd"]), os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY", ""),
-                        home=Path(options["home"]), model=options["model"], base_url=options["base_url"],
+                        provider=options.get("provider","deepseek"),include_usage=options.get("include_usage",True),token_parameter=options.get("token_parameter","max_tokens"),home=Path(options["home"]), model=options["model"], base_url=options["base_url"],
                         request_timeout=options["timeout"], max_steps=options["max_steps"],
                         permission_mode=options.get('permission_mode', 'trusted'), budget_estimator=options.get('budget_estimator', 'calibrated'), active_checks=options.get('active_checks', 2), max_requests=options.get('max_requests'), token_budget=options.get('token_budget'),
                         run_seconds=options.get('run_seconds'), finalize_reserve_seconds=options.get('finalize_reserve_seconds', 10),
                         max_context_bytes=options["max_context_bytes"], shell_timeout=options["shell_timeout"])
         session = (Session.load(project_sessions(config.home, config.cwd) / (options["session_id"] + ".jsonl"), config.cwd)
                    if options.get("session_id") else Session.create(config.home, config.cwd, config.model, build_system_prompt(config.cwd)))
-        config.model = session.header["model"]
+        # Selected profile model is frozen by the job; old transcript remains readable.
         emit("session", {"id": session.header["id"], "recovery": session.refresh_recovery()})
         tools = create_tools(ToolContext(config.cwd, session.artifacts, config.shell_timeout))
         verification = VerificationConfig(options["verify"], config.cwd, options["shell_timeout"], 1) if options.get("verify") else None

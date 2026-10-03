@@ -65,7 +65,8 @@ class Agent:
         started = time.monotonic()
         usage_before = dict(self.session.usage)
         self.session.record_run({"task_id": task_id, "run_id": run_id, "permission_mode": self.config.permission_mode,
-                                 "execution_status": "running", "verification_status": "unverified"})
+                                 "execution_status": "running", "verification_status": "unverified", "model": self.config.model,
+                                 "provider": self.config.provider, "base_url": self.config.base_url})
         evidence = []
         self.budget = run_budget(self.config, bool(self.verification))
         original_client = self.client

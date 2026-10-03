@@ -71,12 +71,12 @@ class JobManager:
                 job['notices'] = ((job.get('notices') or []) + [str(data.get('text', ''))[:2000]])[-6:]
 
     def start(self, data, *, frozen_settings=None, frozen_key=None):
-        settings = dict(self.settings if frozen_settings is None else frozen_settings)
         request_id = data.get('request_id') or uuid.uuid4().hex
         if not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{16,80}', request_id):
             raise ValueError('无效请求 ID。')
         request_hash = hashlib.sha256(json.dumps({k: data.get(k) for k in ('session_id', 'action', 'prompt', 'verify')}, sort_keys=True).encode()).hexdigest()
         with self.lock:
+            settings = dict(self.settings if frozen_settings is None else frozen_settings)
             if self.closing:
                 raise ValueError('服务正在关闭，任务未启动。')
             for existing in self.jobs.values():

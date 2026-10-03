@@ -127,7 +127,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(len(page['items']), 100)
         self.assertEqual(len(self.request('/api/sessions?cursor=100')[1]['items']), 5)
 
-    def test_configuration_is_memory_only_masked_and_environment_owned(self):
+    def test_configuration_is_persisted_masked_and_environment_owned(self):
         with patch.dict(os.environ, {'DEEPSEEK_API_KEY': '', 'LLM_API_KEY': '', 'DEEPSEEK_MODEL': '', 'LLM_MODEL': ''}):
             code, data = self.request('/api/config', {'api_key': 'not-a-real-key', 'model': 'fixture', 'timeout': 2})
             self.assertEqual(code, 200)
@@ -152,6 +152,28 @@ class WorkspaceTests(unittest.TestCase):
                 self.assertEqual(self.request('/api/config', {'api_key': 'other'})[0], 400)
             self.workspace.configure({'api_key': ''})
             self.assertFalse(self.workspace.configuration()['configured'])
+
+    def test_profiles_restart_reveal_and_key_isolation(self):
+        with patch.dict(os.environ, {'DEEPSEEK_API_KEY':'env-fixture'}):
+            data=dict(profile_id='custom',name='Custom',provider='openai-compatible',
+                      model='another-model',base_url='https://example.com/v1',api_key='saved-fixture')
+            code, public=self.request('/api/config',data)
+            self.assertEqual(code,200)
+            self.assertNotIn('saved-fixture',json.dumps(public))
+            self.assertEqual(self.request('/api/config/key',{})[1]['api_key'],'saved-fixture')
+            restarted=Workspace(self.root,self.workspace.home)
+            self.assertEqual(restarted.api_key(),'saved-fixture')
+            self.assertEqual(restarted.settings['provider'],'openai-compatible')
+            self.assertNotIn('saved-fixture',restarted.profile_store.path.read_text(encoding='utf-8') if os.name=='nt' else '')
+            snapshot=dict(restarted.settings)
+            restarted.configure({'profile_id':'default'})
+            self.assertEqual(restarted.api_key(),'env-fixture')
+            self.assertEqual(restarted.key_for_settings(snapshot),'saved-fixture')
+            restarted.configure({'profile_id':'custom'})
+            restarted.configure({'base_url':'https://another.example/v1'})
+            self.assertEqual(restarted.api_key(),'')
+            self.assertEqual(restarted.key_for_settings(snapshot),'')
+            with self.assertRaises(ValueError): restarted.safe_path(str(restarted.profile_store.path))
 
     def test_evidence_log_registered_and_stale(self):
         from test_tools import python_command

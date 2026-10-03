@@ -22,7 +22,7 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-class DeepSeekClient:
+class OpenAICompatibleClient:
     def __init__(self, config: Config, cancelled=None):
         self.config = config
         self.opener = build_opener(NoRedirect())
@@ -36,13 +36,14 @@ class DeepSeekClient:
         payload = {
             "model": self.config.model,
             "messages": messages,
-            "thinking": {"type": "disabled"},
             "stream": streaming,
-            "max_tokens": self.config.max_tokens,
+            self.config.token_parameter: self.config.max_tokens,
         }
+        if self.config.provider == "deepseek":
+            payload["thinking"] = {"type": "disabled"}
         if tools:
             payload.update(tools=tools, tool_choice="auto")
-        if streaming:
+        if streaming and self.config.include_usage:
             payload["stream_options"] = {"include_usage": True}
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = Request(
@@ -75,11 +76,11 @@ class DeepSeekClient:
                      403: "接口访问被拒绝。", 404: "API 地址或模型不存在。",
                      429: "请求受限，请稍后重试。"}
             # Do not print raw responses: upstream errors can echo credentials/prompts.
-            raise ModelError(f"DeepSeek HTTP {status}：" + hints.get(status, "服务请求失败，请稍后重试。")) from None
+            raise ModelError(f"模型 API HTTP {status}：" + hints.get(status, "服务请求失败，请稍后重试。")) from None
         except (URLError, socket.timeout, OSError, HTTPException):
-            raise ModelError("无法连接 DeepSeek 或请求超时，请检查网络和 API 地址。") from None
+            raise ModelError("无法连接模型 API 或请求超时，请检查网络和 API 地址。") from None
         except (ValueError, UnicodeError):
-            raise ModelError("DeepSeek 返回了无效 JSON。") from None
+            raise ModelError("模型 API 返回了无效 JSON。") from None
         return self._parse(result)
 
     @staticmethod
@@ -121,7 +122,7 @@ class DeepSeekClient:
                     break
                 chunk = json.loads(event)
                 if "error" in chunk:
-                    raise ModelError("DeepSeek 返回流式错误，未执行本次工具调用。")
+                    raise ModelError("模型 API 返回流式错误，未执行本次工具调用。")
                 if chunk.get("usage") is not None:
                     if not isinstance(chunk["usage"], dict):
                         raise ValueError()
@@ -208,4 +209,8 @@ class DeepSeekClient:
                 raise ValueError()
             return Completion(message, reason, result.get("usage") or {})
         except (KeyError, IndexError, TypeError, ValueError):
-            raise ModelError("DeepSeek 返回了不完整或无效的消息，未执行任何工具。") from None
+            raise ModelError("模型 API 返回了不完整或无效的消息，未执行任何工具。") from None
+
+
+# Backwards-compatible import for existing callers.
+DeepSeekClient = OpenAICompatibleClient

@@ -40,7 +40,7 @@ class WorkflowFeatures:
             try:
                 result = self.start({'request_id': item['id'], 'session_id': item['session_id'],
                                      'action': 'run', 'prompt': item['prompt'], 'verify': item['settings'].get('verify', '')},
-                                    frozen_settings=item['settings'], frozen_key=self.queue_keys.pop(item['id'], self.api_key()))
+                                    frozen_settings=item['settings'], frozen_key=self.queue_keys.pop(item['id'], self.key_for_settings(item['settings'])))
                 self.inbox.finish(item['id'], 'dispatched')
                 self.inbox.release_job(item['job_id'], result['job_id'])
                 return result

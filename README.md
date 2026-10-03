@@ -831,3 +831,10 @@ Skill / Command 收尾核对（2026-10-02）：186 项完整 Python 回归、后
 本次集中提交此前 Harness、评测、Skill/Command 和 Web 文件树/Markdown 改动；下文及历史章节中的“未提交/推送”是阶段记录。后续优先级见 [下一步计划](docs/下一步计划-2026-10-03.md)。P1.2 真实效率对照与 P1.3 系统隔离仍待完成；此源码同步不代表发布 PyPI 或 GitHub Release。
 
 提交前完整回归：190 项 Python 测试通过（87.277 秒）；最近浏览器回归 24 组通过。凭据特征扫描与暂存差异格式检查通过，运行目录及本地密钥不纳入提交。
+
+
+### 多 API 配置与持久化
+
+Web“模型与 API 设置”支持保存多组 DeepSeek / OpenAI-compatible Chat Completions 连接，修改名称、地址、模型、超时和兼容选项。Key 默认隐藏，可显式显示/隐藏、替换或清除；Windows 下使用当前用户 DPAPI 加密，重启恢复。项目之间隔离，运行中任务保持冻结。默认环境变量配置保留，新建连接使用独立 Key。详见 [API 配置说明](docs/api-configuration.md)。跟踪 [#28](https://github.com/plussea/deepblue/issues/28)，本轮纳入 GitHub 源码同步；不代表发布新版本。
+
+验证：完整 Python 回归 192 项、收尾针对性回归 27 项、浏览器回归 25 组通过；使用模拟接口，未调用付费模型。本地 Web 已更新，刷新后可使用。当前协议范围为 Chat Completions，尚未支持 Responses 或原生 Anthropic；CLI 仍使用启动参数/环境变量。

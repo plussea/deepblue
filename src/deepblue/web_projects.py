@@ -63,7 +63,7 @@ class Projects:
                 raise ValueError('未知项目，请先添加。')
             if identity not in self.workspaces:
                 from .web import Workspace
-                settings = dict(self.primary.settings)
+                settings = {k:v for k,v in self.primary.settings.items() if k not in {'provider','include_usage','token_parameter','api_profile'}}
                 settings['cwd'] = self.paths[identity]
                 workspace = Workspace(**settings)
                 workspace.token = self.primary.token

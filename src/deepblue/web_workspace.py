@@ -33,9 +33,43 @@ class WorkspaceFeatures:
         self.secrets = set()
         self.env_fields = {'model': ('DEEPSEEK_MODEL', 'LLM_MODEL'), 'base_url': ('DEEPSEEK_BASE_URL', 'LLM_BASE_URL'),
                            'timeout': ('LLM_TIMEOUT_SECONDS',), 'api_key': ('DEEPSEEK_API_KEY', 'LLM_API_KEY')}
+        from .provider_store import ProviderStore
+        self.profile_store = ProviderStore(project_sessions(self.home,self.cwd)/'api-profiles.json')
+        self.profiles = {'default': dict(name='默认 DeepSeek',api_key='', provider='deepseek', include_usage=True,token_parameter='max_tokens',
+                                        **{k:self.settings[k] for k in ('model','base_url','timeout')})}
+        saved = self.profile_store.read()
+        if saved: self.profiles = saved['profiles']
+        self.activate_profile(saved['active'] if saved else 'default')
+        self.secrets.update(p['api_key'] for p in self.profiles.values() if p['api_key'])
 
     def api_key(self):
-        return os.getenv('DEEPSEEK_API_KEY') or os.getenv('LLM_API_KEY') or self.memory_key
+        if self.active_profile == 'default':
+            return os.getenv('DEEPSEEK_API_KEY') or os.getenv('LLM_API_KEY') or self.memory_key
+        return self.memory_key
+
+    def key_for_settings(self, settings):
+        identity=settings.get("api_profile", self.active_profile)
+        profile = self.profiles.get(identity,{})
+        if profile.get("base_url") != settings.get("base_url") or profile.get("provider") != settings.get("provider"):
+            return ""
+        if identity == "default":
+            return os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY") or self.profiles.get(identity,{}).get("api_key", "")
+        return self.profiles.get(identity,{}).get("api_key", "")
+
+    def persist_profiles(self):
+        self.profile_store.write(self.active_profile, self.profiles)
+
+    def activate_profile(self, identity):
+        if identity not in self.profiles: raise ValueError('未知 API 配置。')
+        self.active_profile = identity
+        self.settings["api_profile"] = identity
+        item = self.profiles[identity]
+        self.settings.update({k:item[k] for k in ('model','base_url','timeout','provider','include_usage','token_parameter')})
+        self.memory_key = item.get('api_key', '')
+        if identity == 'default':
+            for name in ('model','base_url','timeout'):
+                value = next((os.getenv(n) for n in self.env_fields[name] if os.getenv(n)), None)
+                if value is not None: self.settings[name] = float(value) if name == 'timeout' else value
 
     def redact(self, data):
         keys = sorted(self.secrets | {self.api_key()}, key=len, reverse=True)
@@ -54,43 +88,52 @@ class WorkspaceFeatures:
 
     def configuration(self):
         with self.lock:
-            sources = {k: next((n for n in names if os.getenv(n)), 'memory' if k == 'api_key' and self.memory_key else 'startup')
+            sources = {k: (next((n for n in names if os.getenv(n)), 'saved') if self.active_profile == 'default' else 'saved')
                        for k, names in self.env_fields.items()}
-            return dict(model=self.settings['model'], base_url=self.settings['base_url'], timeout=self.settings['timeout'],
+            return dict(**{k:self.settings[k] for k in ('model','base_url','timeout','provider','include_usage','token_parameter')},
+                        profile_id=self.active_profile, profiles=[{'id':k,'name':v['name']} for k,v in self.profiles.items()],
                         configured=bool(self.api_key()), sources=sources)
 
     def configure(self, data):
+        import re
+        import copy
         with self.lock:
-            settings, key = dict(self.settings), self.memory_key
-            for name in ('model', 'base_url', 'timeout', 'api_key'):
-                if name not in data:
-                    continue
-                if any(os.getenv(n) for n in self.env_fields[name]):
-                    raise ValueError(f'{name} 由环境变量管理，请在启动环境中修改。')
+            profiles = copy.deepcopy(self.profiles)
+            identity = data.get('profile_id', self.active_profile)
+            if not isinstance(identity,str) or not re.fullmatch('[a-zA-Z0-9_-]{1,64}',identity):
+                raise ValueError('无效配置 ID。')
+            if identity not in profiles:
+                if len(profiles) >= 32: raise ValueError('最多保存 32 个 API 配置。')
+                profiles[identity] = dict(name=identity, model='',base_url='https://api.example.com/v1',timeout=30,
+                                          provider='openai-compatible',include_usage=True,token_parameter='max_tokens',api_key='')
+            item = profiles[identity]
+            for name in ('name','model','base_url','timeout','api_key','provider','include_usage','token_parameter'):
+                if name not in data: continue
+                if identity == 'default' and name in self.env_fields and any(os.getenv(n) for n in self.env_fields[name]):
+                    raise ValueError(f'{name} 由环境变量管理；请新建独立 API 配置。')
                 value = data[name]
-                if name == 'timeout':
-                    if isinstance(value, bool) or not isinstance(value, (float, int)) or not 0.1 <= value <= 300:
-                        raise ValueError('超时须在 0.1–300 秒之间。')
-                elif not isinstance(value, str) or len(value) > 2000 or '\n' in value or '\r' in value:
+                if name == 'include_usage':
+                    if type(value) is not bool: raise ValueError('无效用量选项。')
+                elif name == 'timeout':
+                    if type(value) not in (float,int) or not 0.1 <= value <= 300: raise ValueError('超时须在 0.1–300 秒之间。')
+                elif not isinstance(value,str) or len(value)>2000 or '\n' in value or '\r' in value:
                     raise ValueError('配置值无效。')
-                if name == 'api_key':
-                    key = value.strip()
-                else:
-                    settings[name] = value
-            Config(self.cwd, key or self.api_key() or 'validation-only', home=self.home, model=settings['model'],
-                   base_url=settings['base_url'], request_timeout=settings['timeout'])
-            if self.api_key():
-                self.secrets.add(self.api_key())
-            self.memory_key = key
-            if key:
-                self.secrets.add(key)
-            self.settings = settings
+                item[name] = value.strip() if isinstance(value,str) else value
+            if identity == self.active_profile and item['base_url'] != self.settings['base_url'] and 'api_key' not in data:
+                item['api_key'] = ''
+            Config(self.cwd,item['api_key'] or 'validation-only', model=item['model'],base_url=item['base_url'],
+                   provider=item['provider'],include_usage=item['include_usage'],token_parameter=item['token_parameter'],request_timeout=item['timeout'])
+            if self.api_key(): self.secrets.add(self.api_key())
+            self.profile_store.write(identity,profiles)
+            self.profiles = profiles
+            self.activate_profile(identity)
+            self.secrets.update(p['api_key'] for p in profiles.values() if p['api_key'])
             return self.configuration()
 
     def test_connection(self):
         with self.lock:
             config = Config(self.cwd, self.api_key(), home=self.home, model=self.settings['model'],
-                            base_url=self.settings['base_url'], request_timeout=self.settings['timeout'], max_tokens=16, stream=False)
+                            base_url=self.settings['base_url'], request_timeout=self.settings['timeout'], max_tokens=16, stream=False, provider=self.settings['provider'], include_usage=self.settings['include_usage'], token_parameter=self.settings['token_parameter'])
         completion = DeepSeekClient(config).complete([{'role': 'user', 'content': '只回答 OK'}], [])
         return {'ok': True, 'model': config.model, 'usage': completion.usage}
 
@@ -157,7 +200,7 @@ class WorkspaceFeatures:
             task = task_view(session)
             if task and task['runtime'].get('execution_status') == 'running' and job_status in {'interrupted', 'failed', 'cancelled'}:
                 task['runtime']['execution_status'] = 'interrupted'
-            return self.redact(dict(id=session_id, **page, model=session.header['model'], usage=session.usage,
+            return self.redact(dict(id=session_id, **page, model=(session.last_run or {}).get('model',session.header['model']), usage=session.usage,
                 compactions=session.compaction_count, context_bytes=len(json.dumps(context, ensure_ascii=False).encode()),
                 context_limit=self.settings['max_context_bytes'], recovery=session.refresh_recovery(),
                 verification_status=current_status(session.last_run, self.cwd, (self.home,)),
