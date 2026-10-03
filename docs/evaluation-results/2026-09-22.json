@@ -1,0 +1,166 @@
+{
+  "version": "0.7.2",
+  "source_revision": "e05688f4badc5e426c82148f14413b389bb442eb",
+  "evaluator_sha256": "9a9aa2a616297846d80518c20c41ffcc955385f3a9452cde76f01ec0bd19f600",
+  "suite_sha256": "159048a6b252e9177c44fb253b64bc399a8ff7d6a3949b9b364d61fa6b33398f",
+  "model": "deepseek-v4-flash",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "python": "3.12.14",
+  "planned_runs": 10,
+  "max_steps": 8,
+  "max_calls": 80,
+  "token_budget": 150000,
+  "wall_seconds": 1200,
+  "budget": {
+    "calls": 27,
+    "tokens": 130028,
+    "max_calls": 80,
+    "max_tokens": 150000,
+    "unknown_usage": false
+  },
+  "complete": false,
+  "date": "2026-09-22",
+  "run_id": "08cd6992b73d",
+  "records": [
+    {
+      "task_id": "completion-url",
+      "split": "dev",
+      "mode": "baseline",
+      "execution_status": "step_limit",
+      "independent_status": "failed",
+      "failure_category": "step_limit",
+      "usage": {
+        "api_calls": 8,
+        "prompt_tokens": 35778,
+        "completion_tokens": 756,
+        "total_tokens": 36534
+      },
+      "steps": 8,
+      "elapsed_seconds": 9.75,
+      "initial_sha256": "a356c413e93d8a4040c4789a608c7ca387e4c23ddde0afea13f4c1c7db4d2291",
+      "changed_files": [
+        "src/deepblue/config.py"
+      ],
+      "integrity_violations": [],
+      "independent_exit_code": 1
+    },
+    {
+      "task_id": "completion-url",
+      "split": "dev",
+      "mode": "verified",
+      "execution_status": "finished",
+      "independent_status": "passed",
+      "failure_category": null,
+      "usage": {
+        "api_calls": 7,
+        "prompt_tokens": 24094,
+        "completion_tokens": 1426,
+        "total_tokens": 25520
+      },
+      "steps": 7,
+      "elapsed_seconds": 14.422,
+      "initial_sha256": "a356c413e93d8a4040c4789a608c7ca387e4c23ddde0afea13f4c1c7db4d2291",
+      "changed_files": [
+        "src/deepblue/config.py"
+      ],
+      "integrity_violations": [],
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "recursive-glob",
+      "split": "dev",
+      "mode": "verified",
+      "execution_status": "step_limit",
+      "independent_status": "failed",
+      "failure_category": "step_limit",
+      "usage": {
+        "api_calls": 8,
+        "prompt_tokens": 47769,
+        "completion_tokens": 1182,
+        "total_tokens": 48951
+      },
+      "steps": 8,
+      "elapsed_seconds": 13.531,
+      "initial_sha256": "0c487d2534a0d75c022f586f8cc96c93927d7c226fc7579006fc376376556f6d",
+      "changed_files": [
+        "src/deepblue/tools/search.py"
+      ],
+      "integrity_violations": [],
+      "independent_exit_code": 1
+    },
+    {
+      "task_id": "recursive-glob",
+      "split": "dev",
+      "mode": "baseline",
+      "execution_status": "error",
+      "independent_status": "failed",
+      "failure_category": "token_budget",
+      "usage": {
+        "api_calls": 4,
+        "prompt_tokens": 18711,
+        "completion_tokens": 312,
+        "total_tokens": 19023
+      },
+      "steps": 5,
+      "elapsed_seconds": 7.25,
+      "initial_sha256": "0c487d2534a0d75c022f586f8cc96c93927d7c226fc7579006fc376376556f6d",
+      "changed_files": [],
+      "integrity_violations": [],
+      "independent_exit_code": 1
+    },
+    {
+      "task_id": "jsonl-tail",
+      "split": "dev",
+      "mode": "baseline",
+      "execution_status": "not_run",
+      "independent_status": "not_run",
+      "failure_category": "token_budget",
+      "usage": {}
+    },
+    {
+      "task_id": "jsonl-tail",
+      "split": "dev",
+      "mode": "verified",
+      "execution_status": "not_run",
+      "independent_status": "not_run",
+      "failure_category": "token_budget",
+      "usage": {}
+    },
+    {
+      "task_id": "compaction-range",
+      "split": "holdout",
+      "mode": "verified",
+      "execution_status": "not_run",
+      "independent_status": "not_run",
+      "failure_category": "token_budget",
+      "usage": {}
+    },
+    {
+      "task_id": "compaction-range",
+      "split": "holdout",
+      "mode": "baseline",
+      "execution_status": "not_run",
+      "independent_status": "not_run",
+      "failure_category": "token_budget",
+      "usage": {}
+    },
+    {
+      "task_id": "web-storage",
+      "split": "holdout",
+      "mode": "baseline",
+      "execution_status": "not_run",
+      "independent_status": "not_run",
+      "failure_category": "token_budget",
+      "usage": {}
+    },
+    {
+      "task_id": "web-storage",
+      "split": "holdout",
+      "mode": "verified",
+      "execution_status": "not_run",
+      "independent_status": "not_run",
+      "failure_category": "token_budget",
+      "usage": {}
+    }
+  ]
+}

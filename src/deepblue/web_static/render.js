@@ -7,7 +7,7 @@ function highlight(code,text) {
   for(const match of text.matchAll(pattern)){code.append(document.createTextNode(text.slice(offset,match.index)));code.append(node('span',/^['"]/.test(match[0])?'syntax-string':/^#|^\/\//.test(match[0])?'syntax-comment':'syntax-keyword',match[0]));offset=match.index+match[0].length;}
   code.append(document.createTextNode(text.slice(offset)));
 }
-function inline(parent,text) {
+function inline(parent,text,base='') {
   const pattern=/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^\s)]+\))/g;let offset=0;
   for(const m of text.matchAll(pattern)) {
     parent.append(document.createTextNode(text.slice(offset,m.index)));const part=m[0];
@@ -16,18 +16,19 @@ function inline(parent,text) {
     else if(part.startsWith('*'))parent.append(node('em','',part.slice(1,-1)));
     else {const [,label,target]=part.match(/^\[([^\]]+)\]\((.*)\)$/);const a=node('a','',label);
       if(/^https?:\/\//i.test(target)){a.href=target;a.target='_blank';a.rel='noopener noreferrer';}
-      else if(!/^[a-z][a-z\d+.-]*:|^\/\//i.test(target)&&!target.startsWith('#')) {a.href='#';a.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('open-file',{detail:target}));};}
+      else if(!/^[a-z][a-z\d+.-]*:|^\/\//i.test(target)&&!target.startsWith('#')) {a.href='#';a.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('open-file',{detail:base?new URL(target,'http://workspace/'+base).pathname.slice(1)+new URL(target,'http://workspace/'+base).hash:target}));};}
       parent.append(a);
     }offset=m.index+part.length;
   }parent.append(document.createTextNode(text.slice(offset)));
 }
-export function markdown(body,text='') {
-  body.replaceChildren();const lines=String(text).split('\n');let i=0;
+export function markdown(body,text='',base='') {
+  body.replaceChildren();const lines=String(text).replace(/\r\n?/g,'\n').replace(/^\uFEFF/,'').split('\n');let i=0;
   while(i<lines.length){const line=lines[i];
+    if(/^\s*(---+|\*\*\*+|___+)\s*$/.test(line)){body.append(node('hr'));i++;continue;}
     if(line.startsWith('```')) {const language=line.slice(3).trim();const values=[];i++;while(i<lines.length&&!lines[i].startsWith('```'))values.push(lines[i++]);if(i<lines.length)i++;const raw=values.join('\n');const box=node('div','code-block'),bar=node('div','code-toolbar'),copy=node('button','','复制');copy.onclick=safely(async()=>{await navigator.clipboard.writeText(raw);copy.textContent='已复制';});bar.append(node('span','',language||'代码'),copy);const pre=node('pre'),code=node('code');highlight(code,raw);pre.append(code);box.append(bar,pre);body.append(box);continue;}
-    if(i+1<lines.length&&line.includes('|')&&/^\s*\|?\s*:?-{3,}/.test(lines[i+1])) {const table=node('table'),head=node('thead'),tr=node('tr');const cells=s=>s.replace(/^\s*\||\|\s*$/g,'').split('|');for(const c of cells(line)){const th=node('th');inline(th,c.trim());tr.append(th);}head.append(tr);table.append(head);i+=2;const tbody=node('tbody');while(i<lines.length&&lines[i].includes('|')){const row=node('tr');for(const c of cells(lines[i++])){const td=node('td');inline(td,c.trim());row.append(td);}tbody.append(row);}table.append(tbody);const wrap=node('div','table-wrap');wrap.append(table);body.append(wrap);continue;}
-    if(/^\s*([-*+] |\d+\. )/.test(line)){const ordered=/^\s*\d/.test(line),list=node(ordered?'ol':'ul');while(i<lines.length&&/^\s*([-*+] |\d+\. )/.test(lines[i])){const li=node('li');inline(li,lines[i++].replace(/^\s*([-*+] |\d+\. )/,''));list.append(li);}body.append(list);continue;}
-    const heading=line.match(/^(#{1,6})\s+(.*)$/);const element=node(heading?'h'+heading[1].length:line.startsWith('> ')?'blockquote':'p');inline(element,heading?heading[2]:line.replace(/^> /,''));if(line.trim())body.append(element);i++;
+    if(i+1<lines.length&&line.includes('|')&&/^\s*\|?\s*:?-{3,}/.test(lines[i+1])) {const table=node('table'),head=node('thead'),tr=node('tr');const cells=s=>s.replace(/^\s*\||\|\s*$/g,'').split('|');for(const c of cells(line)){const th=node('th');inline(th,c.trim(),base);tr.append(th);}head.append(tr);table.append(head);i+=2;const tbody=node('tbody');while(i<lines.length&&lines[i].includes('|')){const row=node('tr');for(const c of cells(lines[i++])){const td=node('td');inline(td,c.trim(),base);row.append(td);}tbody.append(row);}table.append(tbody);const wrap=node('div','table-wrap');wrap.append(table);body.append(wrap);continue;}
+    if(/^\s*([-*+] |\d+\. )/.test(line)){const ordered=/^\s*\d/.test(line),list=node(ordered?'ol':'ul');while(i<lines.length&&/^\s*([-*+] |\d+\. )/.test(lines[i])){const li=node('li');inline(li,lines[i++].replace(/^\s*([-*+] |\d+\. )/,''),base);list.append(li);}body.append(list);continue;}
+    const heading=line.match(/^(#{1,6})\s+(.*)$/);const element=node(heading?'h'+heading[1].length:line.startsWith('> ')?'blockquote':'p');inline(element,heading?heading[2]:line.replace(/^> /,''),base);if(line.trim())body.append(element);i++;
   }
 }
 export function clearChat(){ $('conversation').replaceChildren();state.stream=null; }
@@ -53,6 +54,7 @@ export function renderEvent({kind,data}) {
   else if(kind==='error'){banner(data.text);notice('错误：'+data.text);}
 }
 export function metrics(data) {
+  $('task-state-detail').textContent=data.task_state?JSON.stringify(data.task_state,null,2):'暂无记录';
   const bytes=data.context_bytes||0,limit=data.context_limit||400000;$('context-value').textContent=(bytes/1000).toFixed(1)+' / '+Math.round(limit/1000)+' KB';$('context-progress').value=Math.min(100,100*bytes/limit);$('tokens-value').textContent=(data.usage?.total_tokens||0).toLocaleString();$('compact-value').textContent=data.compactions||0;$('context-footer').textContent=`${data.usage?.total_tokens||0} tokens · ${data.compactions||0} 次压缩`;
   $('verification-state').textContent=labels[data.verification_status]||'未验证';const r=data.recovery||{};$('recovery-summary').textContent=`${r.confirmed_operations||0} 项完成 · ${r.unfinished_operations?.length||0} 项待核对 · ${r.changed_files?.length||0} 个文件变化`;$('recovery-detail').textContent=JSON.stringify(r,null,2);
   const list=$('evidence-list');list.replaceChildren();for(const e of data.evidence||[]){const card=node('details','tool-card');card.append(node('summary','',`${labels[e.status]||e.status} · ${e.command}`),node('pre','',JSON.stringify(e,null,2)));const button=node('button','','查看日志');button.onclick=safely(async()=>{let offset=0;const load=async()=>{const page=await api(`evidence?id=${data.id}&evidence_id=${e.id}&offset=${offset}`);offset=page.next;return page;};await showLog('验收日志',load);});card.append(button);list.append(card);}

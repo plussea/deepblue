@@ -132,7 +132,8 @@ deepblue-web --cwd "E:\projects\my-app"
 - 浅色界面：白色对话区、浅灰侧栏；底栏常驻累计 Token 与压缩次数。
 - 左侧：会话分页、标题/内容搜索、新建；重命名、归档/恢复、MD/JSON 导出收纳在对话区“会话操作”菜单。运行时可浏览其他会话。
 - 中间：常用 Markdown、代码复制/基础高亮、工具卡片、继续请求、压缩与指定任务停止。草稿按项目/会话保存在浏览器，可清除。
-- 右侧：文件搜索、文本预览、行号/查找/刷新；输入 `@` 或点击“引用文件”将相对路径交给 Agent 读取。
+- 右侧：目录与文件标签切换，最多保留 12 个文件标签；正文占满面板剩余高度，支持行号/查找/刷新。拖动面板左边缘调整宽度，右上角放大/还原，Esc 退出放大；窄屏覆盖式阅读可关闭返回对话。输入 `@` 或点击“引用文件”将相对路径交给 Agent 读取。
+- 输入栏：Enter 发送，Shift+Enter 换行；中文输入法确认候选时不发送。文本框随内容增高，验收命令和清除草稿收在“＋”菜单；保留底部 Token 与压缩计数。文件标签本次页面内保留，刷新后重新打开。
 - “状态”：用量、上下文、验收证据与分页日志、实时工具输出、过期证据和恢复核对。
 - “修改”：只读 Git 状态、暂存/未暂存/未跟踪差异，区分任务开始前已有修改；非 Git 项目显示已记录的文件操作。
 - 展开输入框下的“验收设置”可配置验收命令或清除草稿；失败后最多修复一次。默认单任务最多 30 个模型轮次，Shell/验收超时 120 秒。
@@ -196,6 +197,7 @@ DeepBlue 深蓝 v0.7.2 · deepseek-flash
 | `/compact [N]` | 手动压缩旧历史，默认保留最近 2 个用户轮次；N 为 1–20 |
 | `/paste` | 开始多行输入；单独一行 `/send` 提交，`/cancel` 取消 |
 | `/retry` | 继续待处理的模型请求；不会直接重放历史工具调用 |
+| `/task` | 查看当前任务目标、笔记和程序维护的运行状态 |
 | `/exit`、`/quit` | 保存现有记录并退出 |
 | `Ctrl+C` | 取消当前任务；在输入提示处清空本次输入 |
 | EOF | 退出；Windows 通常为 `Ctrl+Z` 后回车 |
@@ -251,7 +253,7 @@ python scripts/evaluate.py --live --mode verified --tasks add unique clamp mean 
 
 ## 工具
 
-深蓝向模型提供六个工具，按模型给出的顺序执行。
+深蓝向模型提供九个工具，按模型给出的顺序执行。
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
@@ -261,6 +263,9 @@ python scripts/evaluate.py --live --mode verified --tasks add unique clamp mean 
 | `shell` | `command`、可选 `timeout` | 执行命令，返回退出码、合并输出和日志路径 |
 | `find` | `pattern`、可选 `path` / `limit` / `include_hidden` | 按文件名或相对路径 glob 搜索 |
 | `grep` | `pattern`、可选 `path` / `glob` / `limit` / `ignore_case` / `include_hidden` | 搜索字面文本，返回文件、行号和片段 |
+| `task_update` | 可选 `progress` / `blockers` / `next_step`，至少一项 | 保存模型笔记，每项最多 2000 字符；不能修改目标、执行状态或验收结果 |
+| `symbols` | 可选 `path` / `query` / `limit` | Python AST 定义定位，返回限定名、文件与起止行号 |
+| `project_checks` | 可选 `path` | 从项目配置发现候选检查命令，只建议、不执行 |
 
 ### 文件工具
 
@@ -574,6 +579,129 @@ npm run test:web:live
 
 可直接运行 `node scripts/web_live_smoke.cjs --run`。测试修复独立的小文件、运行指定检查、制造可压缩历史并取消一个等待命令，会产生多次模型请求及摘要费用。失败后报告保留已通过项，可使用 `--run --resume .test-tmp/web-live-xxxxxxxx` 继续同一测试会话；它不会重跑已通过项。受控 401/429/超时/断流走 `npm run test:web`，不对真实账户制造故障。
 
+### 首批项目源码对照评测
+
+v0.7.2 已同步 GitHub（`e05688f`）。下一阶段新增 5 个固定源码回归任务，按 dev / holdout 分组，从独立副本比较 baseline / verified，带请求、Token 和时间预算，输出逐项失败分类与 JSON / Markdown 报告。
+
+```powershell
+$env:PYTHONPATH = "src"
+python scripts/evaluate_project.py --validate # 不调用 API，检查原版通过/缺陷版失败
+# 以下显式收费；需要当前进程配置 Key
+python scripts/evaluate_project.py --live --model deepseek-v4-flash
+```
+
+这些是实际项目模块上的人为缺陷，不是历史 Issue 基准；不能据此声称通用完成率。执行器还支持 `--key-file`、`--max-calls`、`--token-budget`、`--seconds`；预算和 Key 使用说明见 [首批评测文档](docs/project-evaluation.md)。新工具的真实运行与提交状态见 [Issue #17](https://github.com/plussea/deepblue/issues/17)。
+
+Agent 新增每轮剩余步数、最小局部修复与直接检查提示；评测按任务对分配预算，每模式独享最多 8 次请求、40,000 Token 保守准入门槛，不借用后续任务额度。完整 **115 项 Python 回归通过**，预算边界与报告调整后 **6 项针对回归通过**。
+
+第二轮真实 DeepSeek 已覆盖全部 **10 次任务**，共 **59 次请求、202,026 Token**。baseline 独立检查通过 **3/5**，verified **4/5**；正常结束且通过分别为 **3/5、1/5**，verified 另外 3 次虽修复通过仍因局部预算停止，不能混算为正常完成。见 [第二轮结果与下一步](docs/evaluation-results/2026-09-23-round2.md)；[首轮预算截断结果](docs/evaluation-results/2026-09-22.md)保留供参考。小样本不能证明模式总体优劣；下一步优先改善预算估计、验收收尾与输出截断。新增代码和文档尚未提交、推送。
+
+### Harness 下一阶段：统一预算与验收收尾
+
+实施顺序与验收标准见 [Harness 下一阶段实施计划](docs/harness下一阶段实施计划.md)，跟踪 [Issue #18](https://github.com/plussea/deepblue/issues/18)。P0.1/P0.2 已本地实现，完整 127 项 Python 回归通过，尚未提交、推送；后续阶段状态见计划。
+
+CLI、Web worker 和评测现在复用核心预算组件。自动压缩、验收失败后的修复请求均计入同次运行；每次运行保存请求数、已报告 Token、保守请求估计与停止原因。步骤上限、上下文上限、输出截断或预算停止后，只要配置了验收命令且时间允许，运行时执行一次最终检查并保存证据。用户取消或网络错误不追加检查；验收通过不把中断改写为正常完成。
+
+```powershell
+# CLI：每次运行最多 12 次模型请求，含自动压缩；为已配置的检查预留 10 秒
+python -m deepblue -p "修复测试失败" --max-requests 12 --token-budget 80000 --run-seconds 180 --finalize-reserve-seconds 10 --verify "python -m unittest discover -s tests"
+# Web：启动参数进入作业配置快照；检查命令仍在 Web 中配置
+python -m deepblue.web --max-requests 12 --token-budget 80000 --run-seconds 180
+```
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `--max-requests` | `max-steps + 4` | 单次运行所有模型请求尝试上限，失败请求也计数 |
+| `--token-budget` | 不限制 | 已报告用量加下一请求保守估计的准入门槛 |
+| `--run-seconds` | 不限制 | 单次运行协作时间限制 |
+| `--finalize-reserve-seconds` | 10 | 有检查命令时提前停止新模型请求，给验收留时间；必须小于运行时限 |
+
+Token 估计在样本不足时使用请求 UTF-8 字节数，满足条件后按下节规则校准；两种模式均保留最大输出和余量，不是精确分词或金额硬上限。时间限制在请求/检查边界协作生效，在途 API、工具和指纹扫描仍可能延迟停止；不是硬实时终止。`/retry` 是新的运行额度，保留任务身份与会话累计用量。手动 `/compact` 仍使用既有摘要请求上限，不属于一次任务 run 的预算。预算参数本阶段通过启动命令配置，尚未增加 Web 设置表单。
+
+最终结果可为 `budget_limit + passed`，表示当前文件通过指定检查，但执行因预算中断；CLI 仍返回非零退出码。P0.3 预算校准与主动验收见下节；持久化任务进度仍属于后续阶段。
+
+### Harness P0.3：预算校准与主动验收
+
+跟踪 [Issue #19](https://github.com/plussea/deepblue/issues/19)，已本地实现，验证状态见下表。原始真实模型评测结果保留，本轮不追加付费调用。
+
+- **预算校准**：默认 `calibrated`。在同次运行、相同工具声明下，最近 16 个样本中至少有 3 个有效 `prompt_tokens` 样本、且各自请求大小为当前的 0.5–2 倍，才采用样本最大 Token/字节比例再加 25% 余量；输入估计不低于字节数的 1/4，另预留完整最大输出与 512 Token。预算总额不变。工具声明变化、缺失输入用量或请求规模突变时回退；出现输入低估后，该工具声明在本次运行内禁用校准。缓存命中 Token 不从输入用量扣除。
+- **可审计**：请求计量记录输入字节数、估计模式、估计输入、供应商输入用量及偏差。校准不是分词器，内容分布改变仍可能低估，不能保证金额硬上限。
+- **主动验收**：已配置验收命令时，在完整 write/edit/shell 工具批次后比较工作区指纹，发现变化即运行检查，并在下一次模型请求前反馈证据。默认每次运行最多 2 次主动检查，可设为 0–10；最终检查仍按现有预算与修复上限执行。指纹无法确认时不猜测变化。
+- **防止重复检查**：同次运行、未变化版本的稳定通过/失败证据可复用；再次修改会失效。Shell 调用即使未改文件也会使缓存失效，避免忽略环境变化。修改工作区的检查、错误、超时和取消证据不复用。此缓存只描述指定检查和受指纹覆盖的文件，不能保证外部服务或时间相关检查仍有效。
+- **不提前宣布完成**：主动检查通过只进入汇报提示，不自动把任务标成完成；后续修改、取消、步骤/预算停止仍按真实状态记录。同一失败证据最多发出一次自动修复要求，且共享 `--verify-repairs` 额度。
+
+```powershell
+# 关闭两项新增行为进行受控对照（不改变其他运行时行为）
+python -m deepblue -p "修复测试" --verify "python check.py" --budget-estimator conservative --active-checks 0
+# Web 同样支持这两个启动参数；作业启动后冻结配置
+python -m deepblue.web --budget-estimator calibrated --active-checks 2
+```
+
+评测脚本也支持 `--budget-estimator` 和 `--active-checks`，并记录 `calibrated-active-verification-v1` 策略及实际选项；这与历史第二轮不同，不混称同一实验条件。尚未通过新的真实模型样本证明完成率或成本改善。
+
+### Harness P1.1：任务状态与恢复接续
+
+跟踪 [Issue #20](https://github.com/plussea/deepblue/issues/20)。任务状态以带版本的 `task_state` 事件追加到会话 JSONL，与聊天摘要独立保存，旧会话仍可加载。
+
+- **用户目标与验收条件**：保存本次原始任务文本、来源消息位置和实际配置的验收命令。新任务创建新身份；`/retry` 保留目标、模型笔记及已观察写入路径，同时记录上一运行的历史状态。旧会话没有结构化目标时明确标为未知，不从模型回复推断。
+- **模型笔记**：Agent 可通过 `task_update` 更新进度、阻碍和下一步。这些字段明确标注为模型陈述，不能设置运行完成或检查通过。
+- **程序事实**：工具批次、验收和运行结束时保存状态、步数、停止原因、已观察 write/edit 路径及证据引用。Shell 的全部文件副作用不在该路径列表中；仍需查看 diff/检查证据。重启发现未结束运行时标记中断，不重放未知操作。
+- **接续上下文**：每次模型请求都附带当前任务状态，压缩不会删除它，也不修改原始系统提示。长目标在模型上下文中最多展示 6000 字符并标注截断，原文仍在记录中；任务状态本身也计入上下文和预算。
+- **查看**：CLI 使用 `/task`；Web 在“状态 → 任务状态”折叠查看。刷新和增量读取可恢复；检查通过仍按工作区指纹判定是否过期。
+
+本阶段提供任务记录与提示接续，不提供自动排队、跨任务调度或自动续跑。长任务仍需用户继续或 `/retry`。没有追加真实模型付费实验；源码尚未提交、推送。
+
+## 按需定位与操作计量（P1.2，本地实现）
+
+跟踪 [Issue #21](https://github.com/plussea/deepblue/issues/21)。`symbols` 按名称子串匹配 Python 类和函数（含嵌套定义），先定位再分页 `read`；不导入源码，不提供引用分析或持久索引。默认跳过依赖、隐藏目录及链接；每次最多扫描 200 个 Python 文件、每个 256 KiB，5 秒协作时限及约 30 KiB 结果上限。`truncated` / `skipped` / `syntax_errors` 表示结果可能不全，应缩小范围。单个 AST 解析期间不能硬实时中断。
+
+`project_checks` 只读取指定目录的 `pytest.ini`、`pyproject.toml` 与 `package.json`，返回 pytest 配置标记以及 npm 的 test/lint/typecheck/check 脚本对应候选命令。它不完整解析 TOML、不保证依赖或命令可用，不递归推断所有构建系统，也不执行脚本或覆盖已有验收命令；候选为空时应阅读项目说明。
+
+每次运行的 `tool_metrics` 保存在运行记录与任务状态中，可通过 CLI `/task` 或 Web 折叠任务状态查看：
+
+- `tool_calls` / `read_calls`：已完成的工具调用与读取次数，不包含被截断而未执行的调用。
+- `repeated_reads`：同次运行内，同一绝对路径、offset、limit 和稳定文件哈希再次读取；不同页或文件变化不计，Shell 后清空读取历史。
+- `failed_calls` / `repeated_failures`：失败次数及同工具、同参数、同错误文本和退出码再次失败的次数。输出正文不参与签名；这是重复结果指标，不等于无效操作或浪费。
+- `calls_before_first_file_change`：第一次成功 write/edit 且观察到文件状态变化之前的工具调用数；没有此类变化时为 null，不统计 Shell 的文件副作用。
+- `tool_seconds`：已完成工具操作的累计耗时，不包含模型请求或独立验收命令。
+
+每个 run 独立计数，恢复依靠完成事件的唯一 ID，不重放工具。旧记录缺少 run ID 时不推断归属。尚未通过新任务固定预算对照验证效率提升；本轮没有追加付费模型调用，代码未提交或推送。
+
+## 工具权限策略（P1.3 第一部分，本地实现）
+
+隔离环境诊断：`python -m deepblue --check-isolation`。无需 Key，不创建会话、不执行项目命令、不安装工具或拉取镜像；报告 Docker 服务、bubblewrap 和 Windows WSL 的可用状态。诊断成功返回 0 仅表示报告已生成，`isolation_verified: false` 明确表示尚未验收隔离，工具可用不等于沙箱生效。当前执行后端仍为 host，受限模式仍禁止 Shell。
+
+
+启动 CLI 或 Web 时可设置 `--permission-mode trusted|workspace|read-only`，默认 `trusted` 保持兼容。Web 作业冻结启动策略，聊天参数不能提升权限。
+
+| 模式 | 文件工具 | Shell / 命令验收 |
+| --- | --- | --- |
+| `trusted` | 原有当前用户权限 | 允许 |
+| `workspace` | 工作目录内读取和修改 | 拒绝 |
+| `read-only` | 工作目录内读取 | 拒绝 |
+
+例如 `python -m deepblue.web --cwd . --permission-mode read-only`。受限模式拒绝越界路径、符号链接/junction、多重硬链接文件、`.git` 等仓库元数据、`.deepblue` 及配置的运行存储目录；递归读取也检查候选文件。`read-only` 仍允许程序保存会话、日志和任务笔记，它限制的是 Agent 项目文件工具。已有会话内容不会因切换模式被删除或自动脱敏，应使用新会话处理不同信任范围的数据。
+
+受限模式不支持 `--verify` 或 Web 的命令验收；此时应移除验收命令，程序明确拒绝执行。运行与任务状态记录实际权限模式。默认 trusted 能执行任意当前用户命令，不能当成隔离环境。
+
+**这属于应用层工具策略，不是操作系统沙箱。** 路径检查与实际打开文件之间仍存在竞态，不能防御同一用户的恶意并发替换；也没有对网络、进程或已加载会话内容提供系统级隔离。P1.3 的完整验收仍待 Shell 沙箱、隔离环境和攻击测试完成，不能据此扩大无人值守范围。跟踪 [Issue #22](https://github.com/plussea/deepblue/issues/22)，代码未提交/推送。
+
+## 扩展接口与任务工作流（P2，本地实现）
+
+P2.1 提供版本 1 的 Python hook：`run`、`tool`、`compact`、`verification` 各有 before/after/error。所有工具和内置权限通过同一调用接口，显式注册扩展工具禁止覆盖已有名称。不会自动加载项目代码或插件。注册示例、错误语义和边界见 [扩展接口](docs/extensions.md)，跟踪 [Issue #24](https://github.com/plussea/deepblue/issues/24)。
+
+P2.2 Web 使用方式，跟踪 [Issue #25](https://github.com/plussea/deepblue/issues/25)：
+
+- **补充指令**：任务执行中输入文字，点击“补充指令”。在下一次模型请求前接收，完整工具批次不会被打断；当前运行预算不重置。如果没有下一次请求，消息暂停留在队列。
+- **后续任务**：执行中 Enter/发送将文字加入后续队列，当前任务正常结束后顺序执行。每条后续任务是新的 run，使用独立预算，因此总费用可能超过单次运行额度；异常、取消或预算停止时暂停剩余消息。
+- **消息队列**：会话操作 → 消息队列，可刷新、修改、取消未领取消息，或空闲时手动执行后续任务。SQLite 事务确保领取与编辑互斥；刷新入队重试保留请求 ID。服务重启把待执行消息转为 held、已领取但结果不明的转为 unknown，不自动重放。unknown 需要先核对历史；确需再做时作为新消息发送。
+- **会话分叉**：会话操作 → 分叉会话，留空复制全部，也可指定历史消息数量（包含系统消息）。只允许完整工具调用/结果边界，原会话不变。分叉不复制文件、用量、任务状态或验收证据；历史文本中的成功陈述不代表当前验收通过。
+- **多项目**：左侧项目“切换”，添加已有绝对目录。通过项目 ID 路由到独立工作区，每个项目串行执行、不同项目可独立运行；切换不取消旧任务或修改其目录。会话、队列和草稿按项目隔离。最近项目目录持久化，最多 16 个；文件标签仍只在当前页面保留。
+
+设置和内存 Key 仍只存当前服务进程；新项目从服务初始项目的当时配置复制默认值，之后独立修改，不复制内存 Key。环境变量仍具有全局优先级。任务启动与后续任务入队时冻结配置；同一服务内排队 Key 仅在内存保留。重启后手动执行 held 后续任务沿用已保存配置并使用当前可用 Key。新任务开始前的文件内容可能变化，应重新阅读和验收。
+
+P1.3 系统级隔离按用户要求暂缓。以上能力不提供沙箱，trusted 模式仍是当前用户权限；workspace/read-only 的工具限制继续生效。实现与测试均为本地状态，尚未提交/推送，没有自动追加付费模型实验。
+
 ## 更新记录与 Issue
 
 下表记录各阶段实现与验收结果，提交同步状态以仓库历史及对应 Issue 为准；推送源码不等于发布 PyPI 包或 GitHub Release。
@@ -598,6 +726,16 @@ npm run test:web:live
 | [#14：Web 存储权限修复](https://github.com/plussea/deepblue/issues/14) | 项目内默认存储、启动写入预检与可操作错误提示 | 22 项 Web 回归通过，实际服务已改用项目内存储；实现完成 |
 | [#15：v0.7.x 真实 Web 验收](https://github.com/plussea/deepblue/issues/15) | 真实浏览器链路、受控故障、错误刷新恢复 | 实现与验收通过；源码交付状态见 Issue |
 | [#16：浅色简约 Web](https://github.com/plussea/deepblue/issues/16) | 配色与信息精简、会话菜单、保留 Token/压缩次数 | 桌面/窄屏回归通过；源码交付状态见 Issue |
+
+| [#17：项目源码对照评测](https://github.com/plussea/deepblue/issues/17) | 5 个固定回归任务、开发/保留分组、预算与独立检查、对照报告 | 本地实现；第二轮 10/10 已运行，区分独立通过与正常完成；待同步源码 |
+| [#18：Harness 预算与收尾](https://github.com/plussea/deepblue/issues/18) | 阶段计划、核心预算、CLI/Web 配置、停止后验收 | 本地实现；127 项 Python 回归通过；尚未提交/推送 |
+| [#19：预算校准与主动验收](https://github.com/plussea/deepblue/issues/19) | 有界样本校准、修改后检查、同版本证据复用、对照开关 | 本地实现；139 项 Python 回归通过；尚未提交/推送 |
+| [#24：生命周期扩展接口](https://github.com/plussea/deepblue/issues/24) | 版本化 hook、工具注册、内置权限 | 本地实现；176 项完整 Python 回归、收尾 25 项针对回归、22 组浏览器回归通过；未提交/推送 |
+| [#25：队列、分叉与多项目](https://github.com/plussea/deepblue/issues/25) | 边界引导、后续队列、完整历史分叉、项目路由 | 本地实现；176 项完整 Python 回归、收尾 25 项针对回归、22 组浏览器回归通过；未提交/推送 |
+| [#23：紧凑输入与文件标签预览](https://github.com/plussea/deepblue/issues/23) | Enter 发送、输入法保护、整高文件标签、拖动与放大/还原 | 本地实现；19 组浏览器回归通过；未提交/推送 |
+| [#22：工具权限策略与隔离边界](https://github.com/plussea/deepblue/issues/22) | 三种权限模式、路径保护、Shell/验收拒绝、Web 配置冻结 | 策略本地实现；162 项 Python 回归及补充 Web worker 测试、16 组浏览器回归通过；沙箱待完成；未提交/推送 |
+| [#21：按需定位与操作计量](https://github.com/plussea/deepblue/issues/21) | Python 定义定位、候选检查发现、重复读取/失败指标 | 本地实现；155 项 Python 回归及补充持久化测试、16 组浏览器回归通过；真实效率对照待完成；未提交/推送 |
+| [#20：任务状态与恢复接续](https://github.com/plussea/deepblue/issues/20) | 任务事件、笔记工具、压缩/重启接续、CLI/Web 查看 | 本地实现；147 项 Python、16 组浏览器回归通过；未提交/推送 |
 
 ## 运行边界
 
@@ -650,3 +788,46 @@ npm run test:web:live
   <strong>DeepBlue · 深蓝</strong><br />
   从一个可靠的编码闭环开始。
 </p>
+
+
+### 导航效率对照准备（2026-09-30，Issue #21）
+
+评测脚本支持 `--navigation on|off`，关闭时移除 symbols/project_checks；baseline/verified 仍用于比较自动验收。报告汇总重复读取、重复失败、工具调用和首次文件修改前调用数，显示计量样本数。8 项针对回归通过，未调用付费模型；新任务真实对照仍待完成。详见 [评测说明](docs/project-evaluation.md#p12-导航消融准备2026-09-30)。本地修改未提交、推送。
+
+导航对照现支持 `--suite navigation --navigation paired --repeats 2`：新增两个尚未运行真实模型的试验任务，同批配对、反转重复顺序、独立预算与四组报告。10 项针对回归通过；真实效率验收仍待完成，跟踪 [#21](https://github.com/plussea/deepblue/issues/21)。
+
+
+### Skill 与自定义命令（Issue #26）
+
+支持用户/项目 `.deepblue/skills/<name>/SKILL.md` 和 `.deepblue/commands/<name>.md`，项目同名优先。Skill 摘要按需加载，命令支持 `{{1}}` / `{{args}}` 参数及 `skills: review` 引用；Web 输入 `/` 可选择并补全，CLI 用 `/skills`、`/commands` 查看。详见 [目录约定与示例](docs/skills-commands.md)。本地实现；186 项完整 Python 回归及后补 6 项针对测试通过，尚未提交/推送。跟踪 [#26](https://github.com/plussea/deepblue/issues/26)。
+
+
+Skill / Command 收尾核对（2026-10-02）：186 项完整 Python 回归、后补 16 项针对回归、23 组浏览器回归通过（计数有重叠，不累计）。日志 `.test-tmp/skills-tests.log`、`.test-tmp/skills-browser.log`，浏览器报告 `.test-tmp/web-e2e-bbc6f44d/report.json`。本地 Web 已启动最新源码，目录 API 与 commands.js 健康检查通过。未付费调用模型、未提交/推送，#26 保持开放等待同步。
+
+
+### 内置命令与 Skill Creator（2026-10-02）
+
+开箱提供 `/review` 审查、`/explain` 解释、`/fix` 修复、`/test` 检查、`/plan` 规划及 `/create-skill` 创建技能。例如 `/review src/`、`/create-skill 为 Python 项目创建测试规范技能`。`/review`、`/explain`、`/plan` 默认不修改文件；`/test` 默认运行相关检查，不自动修复。
+
+`/create-skill` 引用内置 `skill-creator`，生成兼容 DeepBlue 简单元数据格式的 Skill，默认写入项目 `.deepblue/skills`，使用现有工具和权限。默认能力随 Python 包分发，优先级为项目 > 用户 > 内置；CLI 控制命令名仍保留。
+
+17 项针对回归通过，覆盖默认发现、命令展开、技能引用及覆盖规则。通用 Skill validator 缺少 PyYAML 未运行，DeepBlue 实际加载器验证通过；未安装依赖或调用付费模型。代码未提交/推送，跟踪 [Issue #26](https://github.com/plussea/deepblue/issues/26)。服务需重启加载新的默认目录规则。
+
+
+斜杠菜单更新：输入 `/` 同时列出 Command 与 Skill，以 `/ Command`、`◇ Skill` 标识区分；选择技能补全 `/skill:名称 `，可追加任务后发送并明确加载该技能。8 项能力测试通过；实际 Web 验证六个内置命令、Skill 点击、Tab 补全及 Escape 关闭通过。服务已重启，刷新页面生效。跟踪 #26，未提交/推送。
+
+
+### 文件树与 Markdown 预览（2026-10-03）
+
+文件面板改为可原地展开/折叠的目录树，层级缩进、简约箭头和蓝色焦点描边；显示隐藏文件与目录。`.git` 显示为受限项，仍不开放元数据读取；链接/junction 仍跳过，每层最多显示 300 项。文件搜索纳入隐藏目录，保留 Git、依赖与构建缓存排除及数量上限。
+
+`.md` 默认渲染标题、列表、引用、表格、分隔线和带复制按钮的代码块，可切换源码；查找/跳转行号进入源码。保留整高标签预览、拖动宽度和放大。修复 Windows CRLF/BOM 标题识别，相对文件链接按文档目录解析。采用安全 DOM 渲染，HTML 不执行；仍是常用 Markdown 子集，未支持完整 CommonMark、Mermaid 或公式。
+
+9 项 Web Python 回归、24 组浏览器回归通过，覆盖隐藏目录与 Markdown 切换；截图已检查。日志 `.test-tmp/tree-python.log`、`.test-tmp/tree-browser.log`，报告 `.test-tmp/web-e2e-38c11e66/report.json`。本地 Web 已更新，刷新生效。跟踪 [Issue #27](https://github.com/plussea/deepblue/issues/27)，未提交/推送。
+
+
+### 2026-10-03 源码集中同步
+
+本次集中提交此前 Harness、评测、Skill/Command 和 Web 文件树/Markdown 改动；下文及历史章节中的“未提交/推送”是阶段记录。后续优先级见 [下一步计划](docs/下一步计划-2026-10-03.md)。P1.2 真实效率对照与 P1.3 系统隔离仍待完成；此源码同步不代表发布 PyPI 或 GitHub Release。
+
+提交前完整回归：190 项 Python 测试通过（87.277 秒）；最近浏览器回归 24 组通过。凭据特征扫描与暂存差异格式检查通过，运行目录及本地密钥不纳入提交。

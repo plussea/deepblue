@@ -51,6 +51,17 @@ class AgentTests(unittest.TestCase):
         agent = Agent(self.config, client, self.tools, self.session)
         return agent, client, agent.run("修复测试失败")
 
+    def test_remaining_steps_update_without_persisting_or_breaking_tool_pairs(self):
+        self.config.max_steps = 2
+        _, client, result = self.run_agent([
+            response(tool_call('read', {'path':'missing.txt'})),
+            response(reason='stop',content='未完成')])
+        self.assertEqual(result.steps,2)
+        self.assertIn('含本轮剩余 2 轮',client.requests[0][0]['content'])
+        self.assertIn('含本轮剩余 1 轮',client.requests[1][0]['content'])
+        self.assertEqual(self.session.messages[0]['content'],'system')
+        self.assertEqual(client.requests[1][-1]['role'],'tool')
+
     def test_repair_loop_runs_real_failing_and_passing_tests(self):
         (self.root / "calc.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
         # Equal-size source edits within one second can reuse timestamp-based

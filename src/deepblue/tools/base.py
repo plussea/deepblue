@@ -24,9 +24,12 @@ class ToolContext:
     on_process: Callable[[dict], None] | None = None
     cancelled: Callable[[], bool] | None = None
 
+    permission_mode: str = "trusted"
+    protected_paths: tuple[Path, ...] = ()
+
     def path(self, path: str) -> Path:
-        candidate = Path(path).expanduser()
-        return (candidate if candidate.is_absolute() else self.cwd / candidate).resolve()
+        from ..permissions import check_path
+        return check_path(self, path)
 
 
 @dataclass
@@ -74,8 +77,17 @@ class Tool:
 
 class ToolRegistry:
     def __init__(self, context: ToolContext, tools: list[Tool]):
+        from ..hooks import Hooks
+        from ..permissions import authorize
         self.context = context
+        self.hooks = Hooks()
+        self.hooks.on("tool.before", lambda e: authorize(self.context, e["data"]["name"], e["data"]["arguments"]))
         self.tools = {tool.name: tool for tool in tools}
+
+    def register(self, tool):
+        if tool.name in self.tools:
+            raise ValueError("工具名称已存在，禁止覆盖。")
+        self.tools[tool.name] = tool
 
     def declarations(self):
         return [tool.declaration() for tool in self.tools.values()]
@@ -87,6 +99,7 @@ class ToolRegistry:
             tool = self.tools[name]
             args = json.loads(arguments)
             tool.validate(args)
-            return tool.execute(self.context, args)
+            return self.hooks.call("tool", {"name": name, "arguments": args},
+                                   lambda: tool.execute(self.context, args))
         except (OSError, ValueError, TypeError) as exc:
             return {"ok": False, "error": bounded(str(exc), 2000)}

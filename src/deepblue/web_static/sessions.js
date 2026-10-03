@@ -2,7 +2,7 @@ import {$,state,api,node,banner,safely,storage} from './api.js';
 import {clearChat,transcript,metrics,follow,notice} from './render.js';
 let items=[],next=null,before=null,listRequest=null,sessionRequest=null,listGeneration=0,archived=false;
 export function saveDraft(){storage('draft:'+(state.selected||'new'),{prompt:$('prompt').value,verify:$('verify-command').value});}
-export function loadDraft(){const data=storage('draft:'+(state.selected||'new'))||{};$('prompt').value=data.prompt||'';$('verify-command').value=data.verify||'';}
+export function loadDraft(){const data=storage('draft:'+(state.selected||'new'))||{};$('prompt').value=data.prompt||'';$('verify-command').value=data.verify||'';document.dispatchEvent(new Event('draft-loaded'));}
 function show(){const list=$('sessions');list.replaceChildren();for(const item of items){const b=node('button','session-item'+(item.id===state.selected?' active':''),item.title);b.title=item.title;b.onclick=safely(()=>openSession(item.id));list.append(b);}if(!items.length)list.append(node('p','empty-sessions','没有匹配的会话'));$('more-sessions').hidden=next===null;}
 export async function refreshSessions(more=false){listRequest?.abort();listRequest=new AbortController();const version=++listGeneration;const data=await api(`sessions?cursor=${more?(next||0):0}&q=${encodeURIComponent($('session-search').value)}&archived=${archived?1:0}`,undefined,{signal:listRequest.signal});if(version!==listGeneration)return;items=more?[...items,...data.items]:data.items;next=data.next;$('session-count').textContent=data.total;show();}
 export async function openSession(id,{more=false,save=true}={}){

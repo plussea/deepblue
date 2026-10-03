@@ -335,3 +335,41 @@ dialog button,.dialog-actions button,.preview-controls button{background:#f7f7f8
 .workspace{min-height:480px}
 .sidebar{padding-top:16px}
 }
+
+/* Compact composer and full-height tabbed file reader. */
+#composer{position:relative;border-radius:24px;background:#fff}
+#prompt{resize:none;min-height:48px;max-height:160px;padding:14px 18px 4px;line-height:1.6;overflow-y:auto}
+.composer-wrap{padding-top:8px;padding-bottom:10px}
+.composer-tools{padding:4px 12px 10px}
+#send{width:34px;height:34px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:23px}
+.verification-config{padding:0;border:0;position:relative}
+.verification-config>summary{font-size:25px;line-height:32px;width:32px;text-align:center;list-style:none;color:#555}
+.verification-config>summary::-webkit-details-marker{display:none}
+.composer-options{position:absolute;bottom:42px;left:0;width:min(360px,70vw);padding:14px;border:1px solid var(--line);border-radius:12px;background:white;box-shadow:0 6px 24px #00000016;z-index:6}
+.composer-options label{margin-top:0}
+.inspector{position:relative}
+#inspector-resize{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:7;touch-action:none}
+#inspector-resize:hover,#inspector-resize:focus-visible{background:#3978db30}
+#files-panel{display:flex;flex-direction:column;padding:0;overflow:hidden}
+#file-tabs{display:flex;gap:2px;flex-shrink:0;overflow-x:auto;border-bottom:1px solid var(--line);padding:0 8px;min-height:40px}
+#file-tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px;white-space:nowrap;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+#file-tabs button.active{color:var(--text);border-bottom-color:var(--blue)}
+#file-browser{padding:15px;overflow:auto;min-height:0;flex:1}
+#file-preview{margin:0;border:0;border-radius:0;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.preview-header{flex-shrink:0;min-height:38px}
+#preview-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.preview-controls{flex-shrink:0}
+#preview-code{max-height:none;min-height:0;flex:1;font-size:12px;line-height:1.8;overflow:auto;overscroll-behavior:contain}
+.workspace.expanded-inspector .inspector{display:flex;position:fixed;inset:12px;width:auto;z-index:8;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 80px #0003;background:#fff;overflow:hidden}
+.workspace.expanded-inspector #inspector-resize{display:none}
+@media(min-width:1181px){.workspace{grid-template-columns:244px minmax(316px,1fr) clamp(300px,var(--inspector-width,380px),calc(100vw - 560px))}.workspace.no-inspector{grid-template-columns:244px minmax(0,1fr)}}
+@media(max-width:1180px){#inspector-resize{display:none}.workspace.show-inspector .inspector{width:min(560px,100vw)}.workspace.expanded-inspector .inspector{inset:8px;width:auto}}
+@media(max-width:720px){.workspace.show-inspector .inspector{width:100vw}.workspace.expanded-inspector .inspector{inset:0;width:100vw;border-radius:0}.composer-wrap{padding:8px 12px}.composer-options{width:min(320px,80vw)}}
+
+.project-choice{display:block;width:100%;padding:10px;text-align:left;margin:6px 0}.queue-item{border-bottom:1px solid var(--line);padding:12px 0}.queue-item textarea{min-height:65px}.queue-item button{margin-right:6px}
+
+.command-menu{max-height:220px;overflow:auto;border:1px solid #e5e5e5;border-radius:12px;background:#fff;margin:8px}.command-menu button{display:block;width:100%;text-align:left;padding:10px;border:0;background:transparent}.command-menu button[aria-selected="true"]{background:#f0f1f3}
+
+.capability-badge{display:inline-block;min-width:90px;margin-right:10px;font-size:12px;color:#536478}.capability-badge.skill{color:#725496}.command-menu button{white-space:normal;overflow-wrap:anywhere}
+
+.file-tree button{font-size:14px;min-height:36px;align-items:center;border:1px solid transparent;border-radius:7px;gap:8px}.file-tree button:focus,.file-tree button.selected{border-color:#69a9ff;background:#f4f4f5;outline:none}.file-tree .file-icon{width:16px;color:#909399;flex-shrink:0}.file-tree .file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.markdown-document{overflow:auto;min-height:0;flex:1;padding:20px 24px;line-height:1.8;font-size:14px}.markdown-document h1,.markdown-document h2{border-bottom:1px solid #eee;padding-bottom:8px}.markdown-document pre{white-space:pre;overflow:auto}.markdown-document blockquote{border-left:3px solid #ddd;margin-left:0;padding-left:15px;color:#666}

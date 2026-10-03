@@ -118,6 +118,50 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request("/api/session?id=" + session_id)[0], 200)
         self.assertEqual(path.read_bytes(), original)
 
+    def test_restricted_worker_policy_is_frozen_and_rejects_verification(self):
+        self.workspace.settings['permission_mode'] = 'read-only'
+        self.workspace.settings['max_steps'] = 1
+        self.payload = {"role": "assistant", "content": None, "tool_calls": [tool_call("write", {"path": "forbidden", "content": "bad"})]}
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "web-test-secret"}):
+            self.assertEqual(self.request('/api/run', {'prompt': 'reject', 'verify': 'echo bad'})[0], 400)
+            code, _ = self.request('/api/run', {'prompt': 'read only', 'permission_mode': 'trusted'})
+            self.assertEqual(code, 200)
+            self.workspace.settings['permission_mode'] = 'trusted'
+            events = self.wait_job()
+        self.assertFalse((self.root / 'forbidden').exists())
+        state = self.workspace.state(events['session_id'])
+        self.assertEqual(state['last_run']['permission_mode'], 'read-only')
+        results = [json.loads(m['content']) for m in state['messages'] if m['role'] == 'tool']
+        self.assertFalse(results[-1]['ok'])
+        self.assertIn('只读', results[-1]['error'])
+
+    def test_worker_budget_is_frozen_and_final_check_survives_reload(self):
+        self.workspace.settings['max_requests'] = 1
+        self.workspace.settings['token_budget'] = 50000
+        self.workspace.settings['active_checks'] = 1
+        self.workspace.settings['budget_estimator'] = 'conservative'
+        self.payload = {"role": "assistant", "content": None, "tool_calls": [tool_call("write", {"path": "answer", "content": "good"})]}
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "web-test-secret"}):
+            code, _ = self.request('/api/run', {'prompt': 'budget fixture', 'verify': python_command("from pathlib import Path; assert Path('answer').read_text() == 'good'")})
+            self.assertEqual(code, 200)
+            self.workspace.settings['max_requests'] = 10
+            self.workspace.settings['active_checks'] = 0
+            self.workspace.settings['budget_estimator'] = 'calibrated'
+            events = self.wait_job()
+        state = self.workspace.state(events['session_id'])
+        self.assertEqual(state['last_run']['execution_status'], 'budget_limit')
+        self.assertEqual(state['verification_status'], 'passed')
+        self.assertEqual(state['last_run']['budget']['max_calls'], 1)
+        self.assertEqual(state['last_run']['budget']['calls'], 1)
+        self.assertEqual(state['last_run']['budget']['estimator_policy'], 'conservative')
+        self.assertEqual(state['last_run']['active_checks'], 1)
+        restored = Workspace(self.root, self.base / 'home').state(events['session_id'])
+        self.assertEqual(restored['last_run']['budget'], state['last_run']['budget'])
+        self.assertEqual(restored['verification_status'], 'passed')
+        self.assertEqual(restored['task_state']['goal'], 'budget fixture')
+        self.assertEqual(restored['task_state']['runtime']['execution_status'], 'budget_limit')
+        self.assertEqual(restored['task_state']['runtime']['verification_status'], 'passed')
+
     def test_worker_stream_session_resume_and_verification(self):
         with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "web-test-secret"}):
             code, _ = self.request("/api/run", {"prompt": "测试本地会话", "verify": python_command("pass")})

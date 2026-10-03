@@ -10,6 +10,7 @@ from .config import Config
 from .llm import DeepSeekClient
 from .session import project_sessions
 from .verification import current_status
+from .task_state import view as task_view
 from .web_sessions import SessionIndex, atomic_json, message_page
 
 
@@ -153,11 +154,14 @@ class WorkspaceFeatures:
                 job_status = job.get('status')
                 job_notices = list(job.get('notices') or []) if job.get('finished') else []
                 job_outcome = dict(job.get('outcome') or {})
+            task = task_view(session)
+            if task and task['runtime'].get('execution_status') == 'running' and job_status in {'interrupted', 'failed', 'cancelled'}:
+                task['runtime']['execution_status'] = 'interrupted'
             return self.redact(dict(id=session_id, **page, model=session.header['model'], usage=session.usage,
                 compactions=session.compaction_count, context_bytes=len(json.dumps(context, ensure_ascii=False).encode()),
                 context_limit=self.settings['max_context_bytes'], recovery=session.refresh_recovery(),
                 verification_status=current_status(session.last_run, self.cwd, (self.home,)),
-                last_run=session.last_run, metadata=self.metadata(session_id), evidence=self.evidence_list(session), job_status=job_status,
+                task_state=task, last_run=session.last_run, metadata=self.metadata(session_id), evidence=self.evidence_list(session), job_status=job_status,
                 job_notices=job_notices, job_outcome=job_outcome,
                 logs=[dict(id=o['operation_id'], name=o['name'], phase=o['phase']) for o in session.operations.values() if o.get('log_path')]))
 
@@ -226,7 +230,7 @@ class WorkspaceFeatures:
             raise ValueError('搜索词过长。')
         results, visited = [], 0
         for folder, directories, files in os.walk(self.cwd, followlinks=False):
-            directories[:] = [d for d in sorted(directories) if not d.startswith('.') and d not in {'node_modules', '__pycache__', 'build', 'dist'}
+            directories[:] = [d for d in sorted(directories) if d not in {'.git', 'node_modules', '__pycache__', 'build', 'dist'}
                               and not (Path(folder) / d).is_symlink() and not getattr((Path(folder) / d).lstat(), 'st_file_attributes', 0) & 0x400]
             for name in sorted(files):
                 visited += 1

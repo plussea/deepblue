@@ -7,7 +7,7 @@ export async function connect(jobId,onPacket,onStopped,{snapshot=true}={}){
     try {
       if(fallback){const packet=await api(`events?job_id=${jobId}&after=${cursor}&snapshot=${snapshot?1:0}`,undefined,{signal:active.signal});if(failures)banner();failures=0;await onPacket(packet);cursor=packet.sequence;snapshot=false;if(packet.finished)return;await new Promise(r=>setTimeout(r,650));continue;}
       timer=setTimeout(()=>active?.abort(),30000);
-      const response=await fetch(`/api/stream?job_id=${jobId}&after=${cursor}&snapshot=${snapshot?1:0}`,{headers:{'X-Deepblue-Token':state.token},signal:active.signal});
+      const response=await fetch(`/api/stream?job_id=${jobId}&after=${cursor}&snapshot=${snapshot?1:0}`,{headers:{'X-Deepblue-Token':state.token,'X-Deepblue-Project':state.projectId},signal:active.signal});
       if(!response.ok){const error=Error((await response.json()).error||'连接失败');error.status=response.status;throw error;}
       if(!response.body?.getReader){fallback=true;continue;}
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';

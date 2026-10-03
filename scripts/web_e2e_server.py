@@ -86,12 +86,22 @@ def main():
     base = Path(__file__).resolve().parents[1] / '.test-tmp' / ('web-e2e-' + uuid.uuid4().hex[:8])
     root = base / 'project'
     root.mkdir(parents=True)
+    commands = root / '.deepblue' / 'commands'
+    commands.mkdir(parents=True)
+    (commands / 'review.md').write_text('---\ndescription: 审查文件\nskills: audit\n---\nReview {{1}}', encoding='utf-8')
+    skills = root / '.deepblue' / 'skills' / 'audit'
+    skills.mkdir(parents=True)
+    (skills / 'SKILL.md').write_text('Inspect then verify.', encoding='utf-8')
     (root / 'hello.py').write_text('# example\nprint("hello")\n', encoding='utf-8')
+    (root.parent / 'second-project').mkdir()
+    (root / 'notes.py').write_text('# second tab\n', encoding='utf-8')
     def git(*args):
         subprocess.run(['git', *args], cwd=root, check=True, capture_output=True,
                        **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+    (root/'.hidden').mkdir()
+    (root/'.hidden'/'guide.md').write_text('# Guide\n\n**strong**\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n<script>window.injected=true</script>',encoding='utf-8')
     git('init', '-q')
-    git('add', 'hello.py')
+    git('add', 'hello.py', 'notes.py', '.deepblue', '.hidden')
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture')
     (root / 'hello.py').write_text('# example\nprint("staged")\n', encoding='utf-8')
     git('add', 'hello.py')

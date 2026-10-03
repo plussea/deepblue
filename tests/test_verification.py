@@ -70,7 +70,7 @@ class VerificationTests(unittest.TestCase):
         agent, client = self.agent(python_command("raise AssertionError()"), [response(reason="stop"), response(reason="stop")])
         result = agent.run("fix")
         self.assertEqual(result.steps, 2)
-        self.assertEqual(len(result.evidence), 2)
+        self.assertEqual(len(result.evidence), 1)  # Unchanged failed check is reused, not rerun.
 
     def test_no_checks_unverified_and_next_run_invalidates_previous(self):
         agent, _ = self.agent(python_command("pass"), [response(reason="stop")])

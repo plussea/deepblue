@@ -34,6 +34,8 @@ def main():
         config = Config(Path(options["cwd"]), os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY", ""),
                         home=Path(options["home"]), model=options["model"], base_url=options["base_url"],
                         request_timeout=options["timeout"], max_steps=options["max_steps"],
+                        permission_mode=options.get('permission_mode', 'trusted'), budget_estimator=options.get('budget_estimator', 'calibrated'), active_checks=options.get('active_checks', 2), max_requests=options.get('max_requests'), token_budget=options.get('token_budget'),
+                        run_seconds=options.get('run_seconds'), finalize_reserve_seconds=options.get('finalize_reserve_seconds', 10),
                         max_context_bytes=options["max_context_bytes"], shell_timeout=options["shell_timeout"])
         session = (Session.load(project_sessions(config.home, config.cwd) / (options["session_id"] + ".jsonl"), config.cwd)
                    if options.get("session_id") else Session.create(config.home, config.cwd, config.model, build_system_prompt(config.cwd)))
@@ -42,7 +44,18 @@ def main():
         tools = create_tools(ToolContext(config.cwd, session.artifacts, config.shell_timeout))
         verification = VerificationConfig(options["verify"], config.cwd, options["shell_timeout"], 1) if options.get("verify") else None
         client = DeepSeekClient(config, cancelled=cancelled)
-        agent = Agent(config, client, tools, session, emit, verification, cancelled=cancelled)
+        from .message_queue import MessageQueue
+        inbox = MessageQueue(Path(options['queue_path'])) if options.get('queue_path') else None
+        def steering():
+            if not inbox or cancelled():
+                return
+            for _ in range(32):
+                item = inbox.claim('steering', options['job_id'])
+                if not item:
+                    break
+                yield item
+                inbox.finish(item['id'], 'applied')
+        agent = Agent(config, client, tools, session, emit, verification, cancelled=cancelled, steering=steering)
         if options["action"] == "compact":
             ok = agent.compact()
             emit("done", {"execution_status": "finished" if ok else "error", "verification_status": "unverified"})

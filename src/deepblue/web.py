@@ -18,6 +18,7 @@ from . import __version__
 from .session import project_sessions
 from .web_jobs import JobManager
 from .web_workspace import WorkspaceFeatures
+from .web_workflows import WorkflowFeatures
 from .llm import ModelError
 
 STATIC = Path(__file__).with_name("web_static")
@@ -41,16 +42,21 @@ def check_storage(home, cwd):
                          '或检查 DEEPBLUE_HOME。这是本地存储错误，尚未调用模型 API。') from exc
 
 
-class Workspace(WorkspaceFeatures, JobManager):
+class Workspace(WorkflowFeatures, WorkspaceFeatures, JobManager):
     def __init__(self, cwd, home, model="deepseek-flash", base_url="https://api.deepseek.com", timeout=30,
-                 max_steps=30, max_context_bytes=400000, shell_timeout=120):
+                 max_steps=30, max_context_bytes=400000, shell_timeout=120,
+                 max_requests=None, token_budget=None, run_seconds=None, finalize_reserve_seconds=10, active_checks=2, budget_estimator="calibrated", permission_mode="trusted"):
         self.cwd, self.home = Path(cwd).resolve(), Path(home).resolve()
         if not self.cwd.is_dir():
             raise ValueError("工作目录不存在。")
         check_storage(self.home, self.cwd)
         self.settings = dict(cwd=str(self.cwd), home=str(self.home), model=model, base_url=base_url,
                              timeout=timeout, max_steps=max_steps, max_context_bytes=max_context_bytes,
-                             shell_timeout=shell_timeout)
+                             shell_timeout=shell_timeout, max_requests=max_requests, token_budget=token_budget,
+                             run_seconds=run_seconds, finalize_reserve_seconds=finalize_reserve_seconds, active_checks=active_checks, budget_estimator=budget_estimator, permission_mode=permission_mode)
+        from .config import Config
+        Config(self.cwd, 'validation-only', home=self.home, max_requests=max_requests,
+               token_budget=token_budget, run_seconds=run_seconds, finalize_reserve_seconds=finalize_reserve_seconds, active_checks=active_checks, budget_estimator=budget_estimator, permission_mode=permission_mode)
         self.token = secrets.token_urlsafe(32)
         self.lock = threading.RLock()
         self.init_features()
@@ -75,24 +81,26 @@ class Workspace(WorkspaceFeatures, JobManager):
             raise ValueError("目录不存在。")
         entries = []
         for item in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.casefold())):
-            if item.name.startswith(".") or item.name in {"node_modules", "__pycache__"}:
-                continue
             if item.is_symlink() or getattr(item.lstat(), "st_file_attributes", 0) & 0x400:
                 continue
-            entries.append({"name": item.name, "path": item.relative_to(self.cwd).as_posix(), "directory": item.is_dir()})
+            entries.append({"name": item.name, "path": item.relative_to(self.cwd).as_posix(), "directory": item.is_dir(), "restricted": item.name == ".git"})
             if len(entries) >= 300:
                 break
         return entries
 
 
 def make_server(workspace, port=30142):
+    from .web_projects import Projects, project_id
+    primary = workspace
+    projects = Projects(primary)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
 
         def send(self, code, body, mime="application/json; charset=utf-8"):
             if isinstance(body, (dict, list)):
-                body = workspace.redact(body)
+                for project in projects.workspaces.copy().values():
+                    body = project.redact(body)
             raw = json.dumps(body, ensure_ascii=False).encode("utf-8") if isinstance(body, (dict, list)) else body
             self.send_response(code)
             self.send_header("Content-Type", mime)
@@ -120,8 +128,16 @@ def make_server(workspace, port=30142):
             if not self.allowed(path.startswith("/api/") and path != "/api/bootstrap"):
                 return self.send(403, {"error": "拒绝跨站或未授权请求。"})
             try:
+                workspace = projects.get(self.headers.get("X-Deepblue-Project", ""))
+                if path == "/api/capabilities":
+                    from .capabilities import Catalog
+                    return self.send(200, Catalog(workspace.cwd).public())
+                if path == "/api/projects":
+                    return self.send(200, projects.list())
+                if path == "/api/queue":
+                    return self.send(200, workspace.inbox.list())
                 if path == "/api/bootstrap":
-                    return self.send(200, {"token": workspace.token, "version": __version__, "cwd": str(workspace.cwd), "home": str(workspace.home),
+                    return self.send(200, {"token": primary.token, "project_id": project_id(workspace.cwd), "version": __version__, "cwd": str(workspace.cwd), "home": str(workspace.home),
                         "model": workspace.settings["model"], "configured": bool(workspace.api_key())})
                 if path == "/api/sessions":
                     return self.send(200, workspace.sessions(query.get('cursor', ['0'])[0], query.get('limit', ['50'])[0],
@@ -190,7 +206,7 @@ def make_server(workspace, port=30142):
                     return self.send(200, {"content": raw[:256000].decode("utf-8", errors="replace"), "truncated": len(raw) > 256000})
                 resources = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                              "/style.css": ("style.css", "text/css; charset=utf-8")}
-                for name in ('api.js', 'render.js', 'connection.js', 'sessions.js', 'files.js'):
+                for name in ('api.js', 'render.js', 'connection.js', 'sessions.js', 'files.js', 'workflows.js', 'commands.js'):
                     resources['/' + name] = (name, 'text/javascript; charset=utf-8')
                 if path in resources:
                     name, mime = resources[path]
@@ -203,12 +219,26 @@ def make_server(workspace, port=30142):
             if not self.allowed(True):
                 return self.send(403, {"error": "拒绝跨站或未授权请求。"})
             try:
+                workspace = projects.get(self.headers.get("X-Deepblue-Project", ""))
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 300000 or self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                     raise ValueError("需要有界 JSON 请求。")
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise ValueError("需要 JSON 对象。")
+                if self.path == '/api/projects':
+                    return self.send(200, projects.add(data.get('path')))
+                if self.path == '/api/session/fork':
+                    return self.send(200, workspace.fork(data))
+                if self.path == '/api/queue':
+                    return self.send(200, workspace.queue_message(data))
+                if self.path == '/api/queue/edit':
+                    workspace.inbox.edit(data.get('id'), data.get('prompt'), data.get('cancel') is True)
+                    return self.send(200, {'ok': True})
+                if self.path == '/api/queue/run':
+                    if not isinstance(data.get('id'), str) or not data['id']:
+                        raise ValueError('需要消息 ID。')
+                    return self.send(200, workspace.dispatch_followup(identity=data.get('id')) or {})
                 if self.path == "/api/run":
                     return self.send(200, workspace.start(data))
                 if self.path == "/api/cancel":
@@ -224,7 +254,12 @@ def make_server(workspace, port=30142):
                 self.send(404, {"error": "未找到。"})
             except (ValueError, OSError, ModelError) as exc:
                 self.send(400, {"error": str(exc)})
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    class ProjectServer(ThreadingHTTPServer):
+        def server_close(self):
+            projects.close()
+            super().server_close()
+
+    server = ProjectServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     return server
 
@@ -239,10 +274,19 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=30142)
     parser.add_argument("--model", default=os.getenv("DEEPSEEK_MODEL") or os.getenv("LLM_MODEL") or "deepseek-flash")
     parser.add_argument("--base-url", default=os.getenv("DEEPSEEK_BASE_URL") or os.getenv("LLM_BASE_URL") or "https://api.deepseek.com")
+    parser.add_argument("--budget-estimator", choices=["calibrated", "conservative"], default="calibrated", help="预算估计模式")
+    parser.add_argument("--permission-mode", choices=("trusted", "workspace", "read-only"), default="trusted")
+    parser.add_argument("--active-checks", type=int, default=2, help="修改后主动验收次数上限，0 关闭，最多 10")
+    parser.add_argument("--max-requests", type=int, default=None, help="每次运行请求上限，含自动压缩；默认 max-steps + 4")
+    parser.add_argument("--token-budget", type=int, default=None, help="每次运行 Token 保守准入门槛；默认不限制")
+    parser.add_argument("--run-seconds", type=float, default=None, help="运行协作时限；默认不限制")
+    parser.add_argument("--finalize-reserve-seconds", type=float, default=10, help="有验收命令时预留的收尾秒数")
     parser.add_argument("--timeout", type=float, default=float(os.getenv("LLM_TIMEOUT_SECONDS", "30")))
     args = parser.parse_args(argv)
     try:
-        workspace = Workspace(args.cwd, storage_home(args.cwd, args.home), args.model, args.base_url, args.timeout)
+        workspace = Workspace(args.cwd, storage_home(args.cwd, args.home), args.model, args.base_url, args.timeout,
+                              max_requests=args.max_requests, token_budget=args.token_budget,
+                              run_seconds=args.run_seconds, finalize_reserve_seconds=args.finalize_reserve_seconds, active_checks=args.active_checks, budget_estimator=args.budget_estimator, permission_mode=args.permission_mode)
     except ValueError as exc:
         parser.error(str(exc))
     server = make_server(workspace, args.port)

@@ -83,6 +83,11 @@ def search(context: ToolContext, args: dict, content: bool) -> dict:
 
     needle = pattern.casefold() if args.get("ignore_case", False) else pattern
     for path, relative in files(root, args.get("include_hidden", False), info):
+        try:
+            context.path(str(path))
+        except ValueError:
+            info["skipped"] += 1
+            continue
         if not content:
             if matches(relative, pattern) and not add(relative):
                 break
@@ -90,6 +95,7 @@ def search(context: ToolContext, args: dict, content: bool) -> dict:
         if not matches(relative, args.get("glob", "*")):
             continue
         try:
+            context.path(str(path))
             with path.open("rb") as file:
                 raw_content = file.read(MAX_FILE_BYTES + 1)
             if len(raw_content) > MAX_FILE_BYTES or b"\0" in raw_content:

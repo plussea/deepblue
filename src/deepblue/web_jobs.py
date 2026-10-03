@@ -19,6 +19,11 @@ from .web_sessions import atomic_json
 
 class JobManager:
     def init_jobs(self):
+        self.closing = False
+        from .message_queue import MessageQueue
+        self.inbox = MessageQueue(project_sessions(self.home, self.cwd) / "queue.sqlite3")
+        self.inbox.recover()
+        self.queue_keys = {}
         self.jobs = {}
         self.job = None
         self.job_dir = project_sessions(self.home, self.cwd) / 'web-jobs'
@@ -65,12 +70,15 @@ class JobManager:
                 # Keep bounded, already-redacted diagnostics after transcript refresh/restart.
                 job['notices'] = ((job.get('notices') or []) + [str(data.get('text', ''))[:2000]])[-6:]
 
-    def start(self, data):
+    def start(self, data, *, frozen_settings=None, frozen_key=None):
+        settings = dict(self.settings if frozen_settings is None else frozen_settings)
         request_id = data.get('request_id') or uuid.uuid4().hex
         if not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{16,80}', request_id):
             raise ValueError('无效请求 ID。')
         request_hash = hashlib.sha256(json.dumps({k: data.get(k) for k in ('session_id', 'action', 'prompt', 'verify')}, sort_keys=True).encode()).hexdigest()
         with self.lock:
+            if self.closing:
+                raise ValueError('服务正在关闭，任务未启动。')
             for existing in self.jobs.values():
                 if existing.get('request_id') == request_id:
                     if existing['request_hash'] != request_hash:
@@ -87,6 +95,8 @@ class JobManager:
             if action not in {'run', 'compact', 'retry'}:
                 raise ValueError('无效操作。')
             prompt, command, session_id = data.get('prompt', ''), data.get('verify', ''), data.get('session_id')
+            if command and settings.get("permission_mode", "trusted") != "trusted":
+                raise ValueError("受限模式禁止命令验收。")
             if not isinstance(prompt, str) or len(prompt) > 64000 or (action == 'run' and not prompt.strip()):
                 raise ValueError('任务不能为空且须少于 64000 字符。')
             if not isinstance(command, str) or len(command) > 4000:
@@ -105,7 +115,7 @@ class JobManager:
             elif action != 'run':
                 raise ValueError('请先选择会话。')
             else:
-                session = Session.create(self.home, self.cwd, self.settings['model'], build_system_prompt(self.cwd))
+                session = Session.create(self.home, self.cwd, settings['model'], build_system_prompt(self.cwd))
                 session_id = session.header['id']
                 session.close()
             job_id = uuid.uuid4().hex
@@ -122,11 +132,11 @@ class JobManager:
             if action == 'run':
                 self.append_event(job, 'user', {'text': prompt})
             resolved_prompt = prompt + ('\n\n引用的项目文件（请通过 read 工具读取）：\n' + '\n'.join(references) if references else '')
-            options = {**self.settings, 'session_id': session_id, 'action': action, 'prompt': prompt if action == 'run' else None,
-                       'verify': command, 'cancel_path': str(job['cancel_path'])}
+            options = {**settings, 'session_id': session_id, 'action': action, 'prompt': prompt if action == 'run' else None,
+                       'queue_path': self.inbox.path, 'job_id': job_id, 'verify': command, 'cancel_path': str(job['cancel_path'])}
             if action == 'run':
                 options['prompt'] = resolved_prompt
-            key = self.api_key()
+            key = self.api_key() if frozen_key is None else frozen_key
             if key:
                 self.secrets.add(key)
             threading.Thread(target=self.run_worker, args=(job, options, key), daemon=True).start()
@@ -158,6 +168,14 @@ class JobManager:
                                  'cancelled' if outcome == 'cancelled' else
                                  'completed' if outcome == 'finished' else 'failed')
                 job['finished'] = True
+                self.persist_job(job)
+            try:
+                if job['status'] == 'completed' and not self.closing:
+                    self.dispatch_followup(job['id'])
+                else:
+                    self.inbox.release_job(job['id'])
+            except Exception as exc:
+                self.append_event(job, 'error', {'text': '后续队列暂停：' + str(exc)})
                 self.persist_job(job)
 
     def events(self, after=0, job_id=None, snapshot=False):

@@ -4,7 +4,8 @@ from .read import TOOL as READ
 from .shell import TOOL as SHELL
 from .write import TOOL as WRITE
 from .search import FIND, GREP
+from .navigation import SYMBOLS, CHECKS
 
 
 def create_tools(context: ToolContext) -> ToolRegistry:
-    return ToolRegistry(context, [READ, WRITE, EDIT, SHELL, FIND, GREP])
+    return ToolRegistry(context, [READ, WRITE, EDIT, SHELL, FIND, GREP, SYMBOLS, CHECKS])

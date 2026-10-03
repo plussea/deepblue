@@ -61,3 +61,12 @@ Issue：原始工作台 [#7](https://github.com/plussea/deepblue/issues/7)，总
 最后一次任务的有界错误提示、压缩结果保存在任务元数据中（最多 6 条、每条 2000 字符，先脱敏再写入），刷新或服务重启后可见。新任务不沿用上次错误。短会话没有压缩收益时保留原文，次数不增加。
 
 真实 Web 验收、故障验证和界面变更见 [v0.7.2 验收记录](v0.7.2.md)，跟踪 [#15](https://github.com/plussea/deepblue/issues/15)、[#16](https://github.com/plussea/deepblue/issues/16)。
+
+
+### 文件树与 Markdown 预览（2026-10-03）
+
+文件面板改为可原地展开/折叠的目录树，层级缩进、简约箭头和蓝色焦点描边；显示隐藏文件与目录。`.git` 显示为受限项，仍不开放元数据读取；链接/junction 仍跳过，每层最多显示 300 项。文件搜索纳入隐藏目录，保留 Git、依赖与构建缓存排除及数量上限。
+
+`.md` 默认渲染标题、列表、引用、表格、分隔线和带复制按钮的代码块，可切换源码；查找/跳转行号进入源码。保留整高标签预览、拖动宽度和放大。修复 Windows CRLF/BOM 标题识别，相对文件链接按文档目录解析。采用安全 DOM 渲染，HTML 不执行；仍是常用 Markdown 子集，未支持完整 CommonMark、Mermaid 或公式。
+
+9 项 Web Python 回归、24 组浏览器回归通过，覆盖隐藏目录与 Markdown 切换；截图已检查。日志 `.test-tmp/tree-python.log`、`.test-tmp/tree-browser.log`，报告 `.test-tmp/web-e2e-38c11e66/report.json`。本地 Web 已更新，刷新生效。跟踪 [Issue #27](https://github.com/plussea/deepblue/issues/27)，未提交/推送。

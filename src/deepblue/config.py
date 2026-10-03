@@ -12,7 +12,14 @@ class Config:
     model: str = "deepseek-flash"
     base_url: str = "https://api.deepseek.com"
     home: Path = field(default_factory=lambda: Path.home() / ".deepblue")
+    permission_mode: str = "trusted"
     max_steps: int = 30
+    active_checks: int = 2
+    budget_estimator: str = "calibrated"
+    max_requests: int | None = None
+    token_budget: int | None = None
+    run_seconds: float | None = None
+    finalize_reserve_seconds: float = 10
     request_timeout: float = 120
     shell_timeout: float = 120
     max_tokens: int = 8192
@@ -24,6 +31,25 @@ class Config:
     summary_format: str = "structured"
 
     def __post_init__(self):
+        from .permissions import MODES
+        if self.permission_mode not in MODES:
+            raise ValueError("无效权限模式。")
+        if self.budget_estimator not in {"calibrated", "conservative"}:
+            raise ValueError("无效的预算估计模式。")
+        if type(self.active_checks) is not int or not 0 <= self.active_checks <= 10:
+            raise ValueError('active_checks 必须是 0–10 的整数。')
+        for name in ('max_requests', 'token_budget'):
+            value = getattr(self, name)
+            if value is not None and (type(value) is not int or value <= 0):
+                raise ValueError(f'{name} 必须为正整数。')
+        for name in ('run_seconds', 'finalize_reserve_seconds'):
+            value = getattr(self, name)
+            if value is not None and (type(value) not in (int, float) or value <= 0 or value == float('inf') or value != value):
+                raise ValueError(f'{name} 必须为有限正数。')
+        if self.finalize_reserve_seconds is None:
+            raise ValueError('finalize_reserve_seconds 不能为空。')
+        if self.run_seconds is not None and self.finalize_reserve_seconds >= self.run_seconds:
+            raise ValueError('检查预留时间必须小于运行时间。')
         self.cwd = self.cwd.expanduser().resolve()
         self.home = self.home.expanduser().resolve()
         self.base_url = self.base_url.rstrip("/")

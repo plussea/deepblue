@@ -56,6 +56,13 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--base-url", default=os.getenv("DEEPSEEK_BASE_URL") or os.getenv("LLM_BASE_URL") or "https://api.deepseek.com")
     result.add_argument("--home", type=Path, default=Path(os.getenv("DEEPBLUE_HOME", str(Path.home() / ".deepblue"))))
     result.add_argument("--max-steps", type=int, default=30, help="一次任务最多调用模型的次数")
+    result.add_argument("--budget-estimator", choices=["calibrated", "conservative"], default="calibrated", help="预算估计模式")
+    result.add_argument("--permission-mode", choices=("trusted", "workspace", "read-only"), default="trusted")
+    result.add_argument("--active-checks", type=int, default=2, help="修改后主动验收次数上限，0 关闭，最多 10")
+    result.add_argument("--max-requests", type=int, default=None, help="每次运行请求上限，含自动压缩；默认 max-steps + 4")
+    result.add_argument("--token-budget", type=int, default=None, help="每次运行 Token 保守准入门槛；默认不限制")
+    result.add_argument("--run-seconds", type=float, default=None, help="运行协作时限；默认不限制")
+    result.add_argument("--finalize-reserve-seconds", type=float, default=10, help="有验收命令时预留的收尾秒数")
     result.add_argument("--timeout", type=float, default=os.getenv("LLM_TIMEOUT_SECONDS", "120"), help="API 请求超时秒数")
     result.add_argument("--shell-timeout", type=float, default=120, help="命令执行时限秒数")
     result.add_argument("--max-tokens", type=int, default=8192)
@@ -66,6 +73,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--summary-format", choices=["structured", "text"], default="structured")
     result.add_argument("--compact", action="store_true", help="恢复会话后先手动压缩上下文；须与 -c 一起使用")
     result.add_argument("--keep-turns", type=int, default=2, help="压缩保留最近的用户轮次数（1–20）")
+    result.add_argument("--check-isolation", action="store_true", help="只读诊断隔离工具与服务，无需 API Key")
     result.add_argument("--version", action="version", version="DeepBlue " + __version__)
     verification_group = result.add_mutually_exclusive_group()
     verification_group.add_argument("--verify", metavar="COMMAND", help="模型结束后执行的显式验收命令")
@@ -82,6 +90,10 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(encoding="utf-8", errors="replace")
     argument_parser = parser()
     args = argument_parser.parse_args(argv)
+    if args.check_isolation:
+        from .isolation import diagnostics
+        display(json.dumps(diagnostics(), ensure_ascii=False, indent=2))
+        return 0
     if args.one_shot and not args.prompt and not args.compact:
         argument_parser.error("-p 需要提供任务文本。")
     if args.compact and not args.resume:
@@ -97,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
                         model=args.model or os.getenv("DEEPSEEK_MODEL") or os.getenv("LLM_MODEL") or "deepseek-flash",
                         base_url=args.base_url, home=args.home, max_steps=args.max_steps,
                         request_timeout=args.timeout, shell_timeout=args.shell_timeout,
+                        permission_mode=args.permission_mode, max_requests=args.max_requests, token_budget=args.token_budget, active_checks=args.active_checks, budget_estimator=args.budget_estimator,
+                        run_seconds=args.run_seconds, finalize_reserve_seconds=args.finalize_reserve_seconds,
                         max_tokens=args.max_tokens, max_context_bytes=args.max_context_bytes,
                         stream=not args.no_stream, auto_compact=not args.no_auto_compact,
                         compact_threshold=args.compact_threshold, compact_keep_turns=args.keep_turns,
@@ -153,7 +167,10 @@ def main(argv: list[str] | None = None) -> int:
             if prompt in {"/exit", "/quit"}:
                 return 0
             if prompt == "/help":
-                display("/help 帮助\n/new 新会话\n/status 配置、上下文和用量\n/recovery 只读核对文件与未知操作\n/compact [N] 压缩历史，默认保留最近 2 轮\n/paste 多行输入，单独一行 /send 提交\n/retry 继续待处理请求\n/exit 退出")
+                display("/help 帮助\n/new 新会话\n/status 配置、上下文和用量\n/task 当前任务状态\n/recovery 只读核对文件与未知操作\n/compact [N] 压缩历史，默认保留最近 2 轮\n/paste 多行输入，单独一行 /send 提交\n/retry 继续待处理请求\n/exit 退出")
+            elif prompt == "/task":
+                from .task_state import view
+                display(json.dumps(view(session), ensure_ascii=False, indent=2) if session.task_state else '当前会话尚无结构化任务记录。')
             elif prompt == "/recovery":
                 display(json.dumps(session.refresh_recovery(), ensure_ascii=False, indent=2))
             elif prompt == "/status":
@@ -205,8 +222,13 @@ def main(argv: list[str] | None = None) -> int:
                     agent.run()
                 except ValueError as exc:
                     display(str(exc), error=True)
+            elif prompt in {"/skills", "/commands"}:
+                display(str(agent.catalog.public()[prompt[1:]]))
             elif prompt.startswith("/"):
-                display("未知命令。输入 /help 查看帮助。", error=True)
+                try:
+                    agent.run(prompt)
+                except ValueError as exc:
+                    display(str(exc), error=True)
             else:
                 agent.run(prompt)
     except (OSError, ValueError, KeyError, TypeError) as exc:

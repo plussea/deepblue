@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from .tool_metrics import digest
 
 
 def file_state(path: Path) -> dict:
@@ -58,7 +59,9 @@ def execute_recorded(session, tools, call: dict) -> dict:
     started = time.monotonic()
     name, arguments = call["function"]["name"], call["function"]["arguments"]
     record = {"operation_id": uuid.uuid4().hex, "call_id": call["id"], "name": name,
-              "phase": "started", "message_index": len(session.messages)}
+              "phase": "started", "message_index": len(session.messages),
+              "run_id": (session.last_run or {}).get("run_id")}
+    args = None
     try:
         args = json.loads(arguments)
         if name in {"read", "write", "edit"} and isinstance(args.get("path"), str):
@@ -92,5 +95,11 @@ def execute_recorded(session, tools, call: dict) -> dict:
             finished["after"] = previous
         elif name == "read" and (not result.get("ok") or finished["after"] != record["before"]):
             finished["after"] = {"unknown": "读取失败或期间内容变化，需重新读取"}
+    if name == "read" and result.get("ok") and finished.get("after", {}).get("sha256"):
+        finished["read_signature"] = digest([record["path"], args.get("offset", 1),
+                                             args.get("limit", 300), finished["after"]["sha256"]])
+    if not result.get("ok"):
+        finished["failure_signature"] = digest([name, args if args is not None else arguments,
+                                                 result.get("error"), result.get("exit_code")])
     session.record_operation(finished)
     return result

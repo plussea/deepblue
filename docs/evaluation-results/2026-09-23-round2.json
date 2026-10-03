@@ -1,0 +1,420 @@
+{
+  "version": "0.7.2",
+  "source_revision": "e05688f4badc5e426c82148f14413b389bb442eb",
+  "evaluator_sha256": "59b23883c81c6d5b713f337bc766d3f320a3d3da04b2ac7999a67f93cd305712",
+  "suite_sha256": "159048a6b252e9177c44fb253b64bc399a8ff7d6a3949b9b364d61fa6b33398f",
+  "model": "deepseek-v4-flash",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "python": "3.12.14",
+  "decoding": "provider defaults; thinking disabled; no auto compaction; max output 2048",
+  "planned_runs": 10,
+  "max_steps": 8,
+  "max_calls": 80,
+  "token_budget": 400000,
+  "wall_seconds": 1200,
+  "run_seconds": 120,
+  "allocation": "equal non-transferable per task/mode",
+  "runtime_guidance": "remaining-steps-v1",
+  "agent_sha256": "e9fe33bf21e4fd363b1307297b9202477c32350808c52fcbdbbfe93ffd36f1bc",
+  "prompts_sha256": "4336f3ff0f00e3e865f38c351c7768ee855df207704b091738db2d42f31bb564",
+  "budget": {
+    "calls": 59,
+    "tokens": 202026,
+    "max_calls": 80,
+    "max_tokens": 400000,
+    "unknown_usage": false
+  },
+  "complete": true,
+  "all_runs_started": true,
+  "all_runs_finished": false,
+  "document_date": "2026-09-23",
+  "run_id": "fa801ae99023",
+  "records": [
+    {
+      "task_id": "completion-url",
+      "split": "dev",
+      "mode": "baseline",
+      "execution_status": "finished",
+      "independent_status": "passed",
+      "verification_status": "unverified",
+      "failure_category": null,
+      "usage": {
+        "api_calls": 6,
+        "prompt_tokens": 15821,
+        "completion_tokens": 625,
+        "total_tokens": 16446
+      },
+      "steps": 6,
+      "elapsed_seconds": 8.359,
+      "initial_sha256": "a356c413e93d8a4040c4789a608c7ca387e4c23ddde0afea13f4c1c7db4d2291",
+      "changed_files": [
+        "src/deepblue/config.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 6,
+        "tokens": 16446,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 3,
+        "find": 1,
+        "edit": 1,
+        "shell": 1
+      },
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "completion-url",
+      "split": "dev",
+      "mode": "verified",
+      "execution_status": "error",
+      "independent_status": "failed",
+      "verification_status": "unverified",
+      "failure_category": "token_budget",
+      "usage": {
+        "api_calls": 6,
+        "prompt_tokens": 19661,
+        "completion_tokens": 1023,
+        "total_tokens": 20684
+      },
+      "steps": 7,
+      "elapsed_seconds": 10.344,
+      "initial_sha256": "a356c413e93d8a4040c4789a608c7ca387e4c23ddde0afea13f4c1c7db4d2291",
+      "changed_files": [
+        "src/deepblue/config.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 6,
+        "tokens": 20684,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 4,
+        "shell": 3,
+        "grep": 1,
+        "edit": 2
+      },
+      "budget_stop": "token_budget",
+      "budget_scope": "run",
+      "independent_exit_code": 1
+    },
+    {
+      "task_id": "recursive-glob",
+      "split": "dev",
+      "mode": "verified",
+      "execution_status": "error",
+      "independent_status": "passed",
+      "verification_status": "unverified",
+      "failure_category": "token_budget",
+      "usage": {
+        "api_calls": 7,
+        "prompt_tokens": 23066,
+        "completion_tokens": 838,
+        "total_tokens": 23904
+      },
+      "steps": 8,
+      "elapsed_seconds": 10.234,
+      "initial_sha256": "0c487d2534a0d75c022f586f8cc96c93927d7c226fc7579006fc376376556f6d",
+      "changed_files": [
+        "src/deepblue/tools/search.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 7,
+        "tokens": 23904,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 3,
+        "find": 1,
+        "shell": 3,
+        "edit": 1
+      },
+      "budget_stop": "token_budget",
+      "budget_scope": "run",
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "recursive-glob",
+      "split": "dev",
+      "mode": "baseline",
+      "execution_status": "incomplete",
+      "independent_status": "failed",
+      "verification_status": "unverified",
+      "failure_category": "independent_check_failed",
+      "usage": {
+        "api_calls": 5,
+        "prompt_tokens": 17978,
+        "completion_tokens": 2546,
+        "total_tokens": 20524
+      },
+      "steps": 5,
+      "elapsed_seconds": 16.063,
+      "initial_sha256": "0c487d2534a0d75c022f586f8cc96c93927d7c226fc7579006fc376376556f6d",
+      "changed_files": [],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 5,
+        "tokens": 20524,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 2,
+        "find": 1,
+        "shell": 3
+      },
+      "independent_exit_code": 1,
+      "analysis_category": "output_truncated"
+    },
+    {
+      "task_id": "jsonl-tail",
+      "split": "dev",
+      "mode": "baseline",
+      "execution_status": "error",
+      "independent_status": "failed",
+      "verification_status": "unverified",
+      "failure_category": "token_budget",
+      "usage": {
+        "api_calls": 6,
+        "prompt_tokens": 20718,
+        "completion_tokens": 1422,
+        "total_tokens": 22140
+      },
+      "steps": 7,
+      "elapsed_seconds": 11.75,
+      "initial_sha256": "01100c075fa9b8320748c619ae5146275c77d2c9ef08e61913b34ec0934a5a75",
+      "changed_files": [
+        "src/deepblue/web_sessions.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 6,
+        "tokens": 22140,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 2,
+        "find": 1,
+        "shell": 2,
+        "edit": 2
+      },
+      "budget_stop": "token_budget",
+      "budget_scope": "run",
+      "independent_exit_code": 1
+    },
+    {
+      "task_id": "jsonl-tail",
+      "split": "dev",
+      "mode": "verified",
+      "execution_status": "error",
+      "independent_status": "passed",
+      "verification_status": "unverified",
+      "failure_category": "token_budget",
+      "usage": {
+        "api_calls": 5,
+        "prompt_tokens": 19962,
+        "completion_tokens": 607,
+        "total_tokens": 20569
+      },
+      "steps": 6,
+      "elapsed_seconds": 7.39,
+      "initial_sha256": "01100c075fa9b8320748c619ae5146275c77d2c9ef08e61913b34ec0934a5a75",
+      "changed_files": [
+        "src/deepblue/web_sessions.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 5,
+        "tokens": 20569,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 4,
+        "shell": 2,
+        "edit": 1
+      },
+      "budget_stop": "token_budget",
+      "budget_scope": "run",
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "compaction-range",
+      "split": "holdout",
+      "mode": "verified",
+      "execution_status": "finished",
+      "independent_status": "passed",
+      "verification_status": "passed",
+      "failure_category": null,
+      "usage": {
+        "api_calls": 6,
+        "prompt_tokens": 15237,
+        "completion_tokens": 886,
+        "total_tokens": 16123
+      },
+      "steps": 6,
+      "elapsed_seconds": 9.844,
+      "initial_sha256": "8b22edb246a41312f135d3d69722e40b4f184fd79ad9f687a2960eaf261f09e2",
+      "changed_files": [
+        "src/deepblue/config.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 6,
+        "tokens": 16123,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 2,
+        "find": 1,
+        "edit": 1,
+        "shell": 2
+      },
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "compaction-range",
+      "split": "holdout",
+      "mode": "baseline",
+      "execution_status": "finished",
+      "independent_status": "passed",
+      "verification_status": "unverified",
+      "failure_category": null,
+      "usage": {
+        "api_calls": 7,
+        "prompt_tokens": 21114,
+        "completion_tokens": 1618,
+        "total_tokens": 22732
+      },
+      "steps": 7,
+      "elapsed_seconds": 11.422,
+      "initial_sha256": "8b22edb246a41312f135d3d69722e40b4f184fd79ad9f687a2960eaf261f09e2",
+      "changed_files": [
+        "src/deepblue/config.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 7,
+        "tokens": 22732,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 3,
+        "edit": 1,
+        "shell": 3
+      },
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "web-storage",
+      "split": "holdout",
+      "mode": "baseline",
+      "execution_status": "finished",
+      "independent_status": "passed",
+      "verification_status": "unverified",
+      "failure_category": null,
+      "usage": {
+        "api_calls": 6,
+        "prompt_tokens": 17253,
+        "completion_tokens": 1115,
+        "total_tokens": 18368
+      },
+      "steps": 6,
+      "elapsed_seconds": 9.547,
+      "initial_sha256": "0ec3deee904169e42983481db488d1bb4091624404e4e0d3a48ff46535548f4c",
+      "changed_files": [
+        "src/deepblue/web.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 6,
+        "tokens": 18368,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "read": 3,
+        "edit": 1,
+        "shell": 2
+      },
+      "independent_exit_code": 0
+    },
+    {
+      "task_id": "web-storage",
+      "split": "holdout",
+      "mode": "verified",
+      "execution_status": "error",
+      "independent_status": "passed",
+      "verification_status": "unverified",
+      "failure_category": "token_budget",
+      "usage": {
+        "api_calls": 5,
+        "prompt_tokens": 19874,
+        "completion_tokens": 662,
+        "total_tokens": 20536
+      },
+      "steps": 6,
+      "elapsed_seconds": 6.984,
+      "initial_sha256": "0ec3deee904169e42983481db488d1bb4091624404e4e0d3a48ff46535548f4c",
+      "changed_files": [
+        "src/deepblue/web.py"
+      ],
+      "integrity_violations": [],
+      "allocation": {
+        "calls": 5,
+        "tokens": 20536,
+        "max_calls": 8,
+        "max_tokens": 40000,
+        "unknown_usage": false
+      },
+      "tool_counts": {
+        "find": 1,
+        "read": 3,
+        "shell": 1,
+        "grep": 1,
+        "edit": 1
+      },
+      "budget_stop": "token_budget",
+      "budget_scope": "run",
+      "independent_exit_code": 0
+    }
+  ],
+  "summary": {
+    "baseline": {
+      "planned": 5,
+      "started": 5,
+      "independent_passed": 3,
+      "finished_and_passed": 3,
+      "passed_but_interrupted": 0,
+      "tokens": 100210,
+      "seconds": 57.141
+    },
+    "verified": {
+      "planned": 5,
+      "started": 5,
+      "independent_passed": 4,
+      "finished_and_passed": 1,
+      "passed_but_interrupted": 3,
+      "tokens": 101816,
+      "seconds": 44.796
+    }
+  }
+}

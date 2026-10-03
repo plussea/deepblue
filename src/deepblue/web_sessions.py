@@ -65,6 +65,8 @@ class SessionIndex:
                     elif kind == 'run':
                         session.last_run = record
                         session.runs[record['run_id']] = record
+                    elif kind == 'task_state':
+                        session.apply_task_state(record['state'])
                     elif kind == 'operation':
                         session.operations[record['operation_id']] = record
                     elif kind == 'tool_output':
